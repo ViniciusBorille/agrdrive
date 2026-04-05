@@ -34,53 +34,13 @@ async function findOneByUsername(username) {
 }
 
 async function create(userInputValues) {
-  await validateUniqueEmail(userInputValues.email);
   await validateUniqueUsername(userInputValues.username);
+  await validateUniqueEmail(userInputValues.email);
   await validateUserRole(userInputValues.role);
   await hashPasswordInObject(userInputValues);
 
   const newUser = await runInsertQuery(userInputValues);
   return newUser;
-
-  async function validateUniqueEmail(email) {
-    const results = await database.query({
-      text: `
-      SELECT
-        email
-      FROM
-        users
-      WHERE
-        LOWER(email) = LOWER($1)
-    ;`,
-      values: [email],
-    });
-
-    if (results.rowCount > 0) {
-      throw new ValidationError({
-        message: "O email informado já está sendo utilizado.",
-        action: "Utilize outro email para realizar o cadastro.",
-      });
-    }
-  }
-
-  async function validateUserRole(role) {
-    if (
-      role != "gestor" &&
-      role != "financeiro" &&
-      role != "tecnico" &&
-      role != "atendente"
-    ) {
-      throw new ValidationError({
-        message: "O role informado não é permitido.",
-        action: "Utilize outro role para realizar o cadastro.",
-      });
-    }
-  }
-
-  async function hashPasswordInObject(userInputValues) {
-    const hashedPassword = await password.hash(userInputValues.password);
-    userInputValues.password = hashedPassword;
-  }
 
   async function runInsertQuery(userInputValues) {
     const results = await database.query({
@@ -107,14 +67,55 @@ async function create(userInputValues) {
 async function update(username, userInputValues) {
   const currentUser = await findOneByUsername(username);
 
-  if("username" in userInputValues) {
-    await validateUniqueUsername(userInputValues.username)
+  if ("username" in userInputValues) {
+    await validateUniqueUsername(userInputValues.username);
   }
-}
 
-  async function validateUniqueUsername(username) {
+  if ("email" in userInputValues) {
+    await validateUniqueEmail(userInputValues.email);
+  }
+
+  if ("password" in userInputValues) {
+    await hashPasswordInObject(userInputValues);
+  }
+
+  if ("role" in userInputValues) {
+    await validateUserRole(userInputValues.role);
+  }
+
+  const userWithNewValues = { ...currentUser, ...userInputValues };
+
+  const updatedUser = await runUpdateQuery(userWithNewValues);
+  return updatedUser;
+
+  async function runUpdateQuery(userWithNewValues) {
     const results = await database.query({
       text: `
+        UPDATE
+          users
+        SET
+          username = $2,
+          email = $3,
+          password = $4,
+          updated_at = timezone('utc', now())
+        WHERE
+          id = $1
+        RETURNING
+          *
+        ;`,
+      values: [
+        userWithNewValues.id,
+        userWithNewValues.username,
+        userWithNewValues.email,
+        userWithNewValues.password,
+      ],
+    });
+    return results.rows[0];
+  }
+}
+async function validateUniqueUsername(username) {
+  const results = await database.query({
+    text: `
       SELECT
         username
       FROM
@@ -122,16 +123,55 @@ async function update(username, userInputValues) {
       WHERE
         LOWER(username) = LOWER($1)
     ;`,
-      values: [username],
+    values: [username],
+  });
+  if (results.rowCount > 0) {
+    throw new ValidationError({
+      message: "O username informado já está sendo utilizado.",
+      action: "Utilize outro username para realizar esta operação.",
     });
-    if (results.rowCount > 0) {
-      throw new ValidationError({
-        message: "O username informado já está sendo utilizado.",
-        action: "Utilize outro username para realizar o cadastro.",
-      });
-    }
   }
+}
 
+async function validateUniqueEmail(email) {
+  const results = await database.query({
+    text: `
+      SELECT
+        email
+      FROM
+        users
+      WHERE
+        LOWER(email) = LOWER($1)
+    ;`,
+    values: [email],
+  });
+
+  if (results.rowCount > 0) {
+    throw new ValidationError({
+      message: "O email informado já está sendo utilizado.",
+      action: "Utilize outro email para realizar esta operação.",
+    });
+  }
+}
+
+async function hashPasswordInObject(userInputValues) {
+  const hashedPassword = await password.hash(userInputValues.password);
+  userInputValues.password = hashedPassword;
+}
+
+async function validateUserRole(role) {
+  if (
+    role != "gestor" &&
+    role != "financeiro" &&
+    role != "tecnico" &&
+    role != "atendente"
+  ) {
+    throw new ValidationError({
+      message: "O role informado não é permitido.",
+      action: "Utilize outro role para realizar o cadastro.",
+    });
+  }
+}
 
 const user = {
   create,
