@@ -1,0 +1,44 @@
+name: PR Context
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+jobs:
+  validate-pr-context:
+    name: Validate PR context
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const title = context.payload.pull_request.title || "";
+
+            const validations = [
+              {
+                label: "Jira section",
+                ok: /## Jira/i.test(body) && /(https?:\/\/\S+|[A-Z][A-Z0-9]+-\d+)/.test(body),
+              },
+              {
+                label: "Summary section",
+                ok: /## Summary/i.test(body),
+              },
+              {
+                label: "Testing section",
+                ok: /## Testing/i.test(body) && /`npm test`/i.test(body),
+              },
+              {
+                label: "PR title with Jira key or conventional prefix",
+                ok: /([A-Z][A-Z0-9]+-\d+)|(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test):/i.test(title),
+              },
+            ];
+
+            const missing = validations.filter((validation) => !validation.ok);
+
+            if (missing.length > 0) {
+              core.setFailed(
+                `PR sem contexto minimo. Ajuste: ${missing.map((item) => item.label).join(", ")}.`,
+              );
+            }
