@@ -95,7 +95,6 @@ async function findOneById(id) {
   }
 }
 
-
 async function create(userInputValues) {
   await validateUniqueUsername(userInputValues.username);
   await validateUniqueEmail(userInputValues.email);
