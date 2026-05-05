@@ -1,18 +1,19 @@
 import email from "infra/email.js";
 import database from "infra/database.js";
 import webserver from "infra/webserver.js";
-import { NotFoundError } from "infra/errors";
+import { NotFoundError } from "infra/errors.js";
+import user from "models/user.js";
 
-const EXPIRATION_IN_MILISECONDS = 60 * 15 * 1000 // 15 minutes
+const EXPIRATION_IN_MILISECONDS = 60 * 15 * 1000; // 15 minutes
 
 async function findOneByValidId(tokenId) {
-    const activationTokenObject = await runSelectQuery(tokenId);
+  const activationTokenObject = await runSelectQuery(tokenId);
 
-    return activationTokenObject;
+  return activationTokenObject;
 
-    async function runSelectQuery(tokenId) {
-        const results = await database.query({
-            text: `
+  async function runSelectQuery(tokenId) {
+    const results = await database.query({
+      text: `
                 SELECT
                     *
                 FROM
@@ -24,30 +25,30 @@ async function findOneByValidId(tokenId) {
                 LIMIT
                     1
             ;`,
-            values: [tokenId]
-        })
+      values: [tokenId],
+    });
 
-        if(results.rowCount === 0) {
-            throw new NotFoundError({
-                message: "O token de ativação não foi encontrado no sistema ou expirou.",
-                action: "Faça um novo cadastro."
-            })
-        }
-
-        return results.rows[0]
+    if (results.rowCount === 0) {
+      throw new NotFoundError({
+        message:
+          "O token de ativação não foi encontrado no sistema ou expirou.",
+        action: "Faça um novo cadastro.",
+      });
     }
 
+    return results.rows[0];
+  }
 }
 
 async function create(userId) {
-    const expireAt = new Date(Date.now() + EXPIRATION_IN_MILISECONDS)
+  const expireAt = new Date(Date.now() + EXPIRATION_IN_MILISECONDS);
 
-    const newToken = await runInsertQuery(userId, expireAt);
-    return newToken;
+  const newToken = await runInsertQuery(userId, expireAt);
+  return newToken;
 
-    async function runInsertQuery(userId, expireAt) {
-        const results = await database.query({
-            text: `
+  async function runInsertQuery(userId, expireAt) {
+    const results = await database.query({
+      text: `
                 INSERT INTO
                     user_activation_tokens (user_id, expires_at)
                 VALUES
@@ -55,31 +56,57 @@ async function create(userId) {
                 RETURNING
                     *
             ;`,
-            values: [userId, expireAt]
-        });
+      values: [userId, expireAt],
+    });
 
-        return results.rows[0];
-    };
-};
+    return results.rows[0];
+  }
+}
 
 async function sendEmailToUser(user, activationToken) {
-    await email.send({
-        from: "AgrDrive <contato@agrdrive.com.br>",
-        to: user.email,
-        subject: "Ative seu cadastro no AgrDrive!",
-        text: `${user.username}, clique no link abaixo para ativar seu cadastro no AgrDrive:
+  await email.send({
+    from: "AgrDrive <contato@agrdrive.com.br>",
+    to: user.email,
+    subject: "Ative seu cadastro no AgrDrive!",
+    text: `${user.username}, clique no link abaixo para ativar seu cadastro no AgrDrive:
         
 ${webserver.origin}/ativar/${activationToken.id}
 
 Atenciosamente,
 Equipe AgrDrive`,
-    })
+  });
+}
+
+async function markTokenAsUsed(activationTokenId) {
+  const results = await database.query({
+    text: `
+            UPDATE
+                user_activation_tokens
+            SET
+                used_at = timezone('utc', now()),
+                updated_at = timezone('utc', now())
+            WHERE
+                id = $1
+            RETURNING
+                *
+        ;`,
+    values: [activationTokenId],
+  });
+
+  return results.rows[0];
+}
+
+async function activateUserByUserId(userId) {
+  const activatedUser = await user.setFeatures(userId, ["create:sessions"]);
+  return activatedUser;
 }
 
 const activation = {
-    sendEmailToUser,
-    create,
-    findOneByValidId,
-}
+  sendEmailToUser,
+  create,
+  findOneByValidId,
+  markTokenAsUsed,
+  activateUserByUserId,
+};
 
-export default activation
+export default activation;
