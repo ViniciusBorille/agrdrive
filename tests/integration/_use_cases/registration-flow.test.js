@@ -1,3 +1,4 @@
+import webserver from "infra/webserver";
 import activation from "models/activation.js";
 import orchestrator from "tests/orchestrator.js";
 
@@ -42,13 +43,21 @@ describe("Use case: Registration Flow (all successful", () => {
     test("Receive activation email", async () => {
         const lastEmail = await orchestrator.getLastEmail();
 
-        const activationToken = await activation.findOneByUserId(createUserResponseBody.id)
-
         expect(lastEmail.sender).toBe("<contato@agrdrive.com.br>")
         expect(lastEmail.recipients[0]).toBe("<registration.flow@curso.dev>")
         expect(lastEmail.subject).toBe("Ative seu cadastro no AgrDrive!")
         expect(lastEmail.text).toContain("RegistrationFlow")
-        expect(lastEmail.text).toContain(activationToken.id)
+        
+        const activationTokenId = await orchestrator.extractUUID(lastEmail.text)
+
+        expect(lastEmail.text).toContain(
+            `${webserver.origin}/ativar/${activationTokenId}`
+        )
+        console.log(activationTokenId)
+        const activationTokenObject = await activation.findOneByValidId(activationTokenId);
+        console.log(activationTokenObject)
+        expect(activationTokenObject.user_id).toBe(createUserResponseBody.id);
+        expect(activationTokenObject.used_at).toBe(null)
     });
 
     test("Activation account", async () => {

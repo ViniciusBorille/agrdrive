@@ -1,14 +1,16 @@
 import email from "infra/email.js";
 import database from "infra/database.js";
 import webserver from "infra/webserver.js";
+import { NotFoundError } from "infra/errors";
 
-const EXPIRATION_IN_MILISECONDS = 60*15*1000 // 15 minutes
+const EXPIRATION_IN_MILISECONDS = 60 * 15 * 1000 // 15 minutes
 
-async function findOneByUserId(userId) {
-    const newToken = await runSelectQuery(userId);
-    return newToken;
+async function findOneByValidId(tokenId) {
+    const activationTokenObject = await runSelectQuery(tokenId);
 
-    async function runSelectQuery(userId) {
+    return activationTokenObject;
+
+    async function runSelectQuery(tokenId) {
         const results = await database.query({
             text: `
                 SELECT
@@ -16,15 +18,25 @@ async function findOneByUserId(userId) {
                 FROM
                     user_activation_tokens
                 WHERE
-                    user_id = $1
+                    id = $1
+                    AND expires_at > NOW()
+                    AND used_at IS NULL
                 LIMIT
                     1
             ;`,
-            values: [userId]
-        });
+            values: [tokenId]
+        })
 
-        return results.rows[0];
+        if(results.rowCount === 0) {
+            throw new NotFoundError({
+                message: "O token de ativação não foi encontrado no sistema ou expirou.",
+                action: "Faça um novo cadastro."
+            })
+        }
+
+        return results.rows[0]
     }
+
 }
 
 async function create(userId) {
@@ -67,7 +79,7 @@ Equipe AgrDrive`,
 const activation = {
     sendEmailToUser,
     create,
-    findOneByUserId,
+    findOneByValidId,
 }
 
 export default activation
