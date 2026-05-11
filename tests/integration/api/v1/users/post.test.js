@@ -2,6 +2,7 @@ import { version as uuidVersion } from "uuid";
 import orchestrator from "tests/orchestrator.js";
 import user from "models/user.js";
 import password from "models/password.js";
+import { describe } from "node:test";
 
 beforeAll(async () => {
   await orchestrator.waitForAllServices();
@@ -163,4 +164,36 @@ describe("POST /api/v1/users", () => {
       });
     });
   });
-});
+  describe("Default user", () => {
+    test("With unique and valid data", async () => {
+      const user1 = await orchestrator.createUser()
+      await orchestrator.activateUser(user1)
+      const user1SessionObject = await orchestrator.createSession(user1.id)
+
+      const user2Response = await fetch("http://localhost:3000/api/v1/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `session_id=${user1SessionObject.token}`
+        },
+        body: JSON.stringify({
+          username: "usuarioLogado",
+          email: "usuarioLogado@email.com",
+          password: "senha123",
+          role: "atendente",
+        })
+      })
+
+      expect(user2Response.status).toBe(403)
+
+      const user2ResponseBody = await user2Response.json();
+
+      expect(user2ResponseBody).toEqual({
+        name: "ForbiddenError",
+        message: "Você não possui permissão para executar esta ação.",
+        action: 'Verifique se o seu usuário possui a feature "create:user"',
+        status_code: 403,
+      })
+    })
+  })
+})
