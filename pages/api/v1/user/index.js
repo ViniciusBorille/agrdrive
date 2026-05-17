@@ -3,7 +3,6 @@ import controller from "infra/controller.js";
 import user from "models/user.js";
 import session from "models/session.js";
 import authorization from "models/authorization.js";
-import { ForbiddenError } from "infra/errors";
 
 const router = createRouter();
 

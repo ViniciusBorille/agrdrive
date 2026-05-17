@@ -1,7 +1,5 @@
 import { InternalServerError } from "infra/errors";
 import authorization from "models/authorization";
-import { create } from "node:domain";
-import Username from "pages/api/v1/users/[username]";
 
 describe("models/authorization.js", () => {
   describe(".can()", () => {
