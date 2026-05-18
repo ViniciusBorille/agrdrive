@@ -50,7 +50,7 @@ describe("GET /api/v1/session", () => {
         username: "UserWithExpiredSession",
       });
 
-      const sessionObject = await orchestrator.createSession(createdUser.id);
+      const sessionObject = await orchestrator.createSession(createdUser);
       await session.expireById(sessionObject.id);
 
       const response = await fetch("http://localhost:3000/api/v1/sessions", {
@@ -88,7 +88,7 @@ describe("GET /api/v1/session", () => {
         username: "UserWithValidSession",
       });
 
-      const sessionObject = await orchestrator.createSession(createdUser.id);
+      const sessionObject = await orchestrator.createSession(createdUser);
 
       const response = await fetch("http://localhost:3000/api/v1/sessions", {
         method: "DELETE",

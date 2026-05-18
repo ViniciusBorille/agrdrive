@@ -60,7 +60,8 @@ async function createUser(userObject) {
   });
 }
 
-async function createSession(userId) {
+async function createSession(userObject) {
+  const userId = userObject?.id;
   return await session.create(userId);
 }
 
