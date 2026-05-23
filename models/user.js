@@ -98,7 +98,6 @@ async function findOneById(id) {
 async function create(userInputValues) {
   await validateUniqueUsername(userInputValues.username);
   await validateUniqueEmail(userInputValues.email);
-  await validateUserRole(userInputValues.role);
   await hashPasswordInObject(userInputValues);
   injectDefaultFeaturesInObject(userInputValues);
 
@@ -109,9 +108,9 @@ async function create(userInputValues) {
     const results = await database.query({
       text: `
     INSERT INTO 
-      users (username, email, password, role, features) 
+      users (username, email, password, features) 
     VALUES 
-      ($1, $2, $3, $4, $5)
+      ($1, $2, $3, $4)
     RETURNING
       *
     ;`,
@@ -119,7 +118,6 @@ async function create(userInputValues) {
         userInputValues.username,
         userInputValues.email,
         userInputValues.password,
-        userInputValues.role,
         userInputValues.features,
       ],
     });
@@ -145,10 +143,6 @@ async function update(username, userInputValues) {
 
   if ("password" in userInputValues) {
     await hashPasswordInObject(userInputValues);
-  }
-
-  if ("role" in userInputValues) {
-    await validateUserRole(userInputValues.role);
   }
 
   const userWithNewValues = { ...currentUser, ...userInputValues };
@@ -225,20 +219,6 @@ async function validateUniqueEmail(email) {
 async function hashPasswordInObject(userInputValues) {
   const hashedPassword = await password.hash(userInputValues.password);
   userInputValues.password = hashedPassword;
-}
-
-async function validateUserRole(role) {
-  if (
-    role != "gestor" &&
-    role != "financeiro" &&
-    role != "tecnico" &&
-    role != "atendente"
-  ) {
-    throw new ValidationError({
-      message: "O role informado não é permitido.",
-      action: "Utilize outro role para realizar o cadastro.",
-    });
-  }
 }
 
 async function setFeatures(userId, features) {

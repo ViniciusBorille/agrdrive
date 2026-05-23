@@ -35,7 +35,7 @@ describe("GET /api/v1/user", () => {
 
       const activatedUser = await orchestrator.activateUser(createdUser);
 
-      const sessionObject = await orchestrator.createSession(createdUser.id);
+      const sessionObject = await orchestrator.createSession(createdUser);
 
       const response = await fetch("http://localhost:3000/api/v1/user", {
         headers: {
@@ -57,7 +57,6 @@ describe("GET /api/v1/user", () => {
         username: "UserWithValidSession",
         email: createdUser.email,
         features: ["create:session", "read:session", "update:user"],
-        role: createdUser.role,
         created_at: createdUser.created_at.toISOString(),
         updated_at: activatedUser.updated_at.toISOString(),
       });
@@ -89,6 +88,7 @@ describe("GET /api/v1/user", () => {
         maxAge: session.EXPIRATION_IN_MILISECONDS / 1000,
         path: "/",
         httpOnly: true,
+        sameSite: "Lax",
       });
     });
     test("With old valid session", async () => {
@@ -101,7 +101,7 @@ describe("GET /api/v1/user", () => {
 
       const activatedUser = await orchestrator.activateUser(createdUser);
 
-      const sessionObject = await orchestrator.createSession(createdUser.id);
+      const sessionObject = await orchestrator.createSession(createdUser);
       jest.useRealTimers();
       const response = await fetch("http://localhost:3000/api/v1/user", {
         headers: {
@@ -118,7 +118,6 @@ describe("GET /api/v1/user", () => {
         username: "UserWithOldValidSession",
         email: createdUser.email,
         features: ["create:session", "read:session", "update:user"],
-        role: createdUser.role,
         created_at: createdUser.created_at.toISOString(),
         updated_at: activatedUser.updated_at.toISOString(),
       });
@@ -150,6 +149,7 @@ describe("GET /api/v1/user", () => {
         maxAge: session.EXPIRATION_IN_MILISECONDS / 1000,
         path: "/",
         httpOnly: true,
+        sameSite: "Lax",
       });
     });
     test("With nonexistent session", async () => {
@@ -178,7 +178,7 @@ describe("GET /api/v1/user", () => {
         username: "UserWithExpiredSession",
       });
 
-      const sessionObject = await orchestrator.createSession(createdUser.id);
+      const sessionObject = await orchestrator.createSession(createdUser);
       await session.expireById(sessionObject.id);
 
       const response = await fetch("http://localhost:3000/api/v1/user", {

@@ -15,21 +15,17 @@ describe("Use case: Registration Flow (all successful", () => {
   let activationTokenId;
   let createSessionResponseBody;
   test("Create user account", async () => {
-    const createUserResponse = await fetch(
-      "http://localhost:3000/api/v1/users",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: "RegistrationFlow",
-          email: "registration.flow@curso.dev",
-          password: "registration",
-          role: "atendente",
-        }),
+    const createUserResponse = await fetch(`${webserver.origin}/api/v1/users`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        username: "RegistrationFlow",
+        email: "registration.flow@curso.dev",
+        password: "registration",
+      }),
+    });
     expect(createUserResponse.status).toBe(201);
 
     createUserResponseBody = await createUserResponse.json();
@@ -40,7 +36,6 @@ describe("Use case: Registration Flow (all successful", () => {
       email: createUserResponseBody.email,
       features: ["read:activation_token"],
       password: createUserResponseBody.password,
-      role: createUserResponseBody.role,
       created_at: createUserResponseBody.created_at,
       updated_at: createUserResponseBody.updated_at,
     });

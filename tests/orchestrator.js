@@ -56,11 +56,11 @@ async function createUser(userObject) {
       userObject?.username || faker.internet.username().replace(/[_.-]/g, ""),
     email: userObject?.email || faker.internet.email(),
     password: userObject?.password || "validpassword",
-    role: userObject?.role || "atendente",
   });
 }
 
-async function createSession(userId) {
+async function createSession(userObject) {
+  const userId = userObject?.id;
   return await session.create(userId);
 }
 

@@ -45,7 +45,7 @@ describe("PATCH /api/v1/users/[username]", () => {
     test("With nonexistent 'username'", async () => {
       const createdUser = await orchestrator.createUser();
       const activatedUser = await orchestrator.activateUser(createdUser);
-      const sessionObject = await orchestrator.createSession(activatedUser.id);
+      const sessionObject = await orchestrator.createSession(activatedUser);
 
       const response = await fetch(
         "http:localhost:3000/api/v1/users/UsuarioInexistente",
@@ -71,18 +71,14 @@ describe("PATCH /api/v1/users/[username]", () => {
     test("With duplicated 'username'", async () => {
       await orchestrator.createUser({
         username: "user1",
-        role: "gestor",
       });
 
       const createdUser2 = await orchestrator.createUser({
         username: "user2",
-        role: "gestor",
       });
 
       const activatedUser2 = await orchestrator.activateUser(createdUser2);
-      const sessionObject2 = await orchestrator.createSession(
-        activatedUser2.id,
-      );
+      const sessionObject2 = await orchestrator.createSession(activatedUser2);
 
       const response = await fetch("http:localhost:3000/api/v1/users/user2", {
         method: "PATCH",
@@ -109,18 +105,14 @@ describe("PATCH /api/v1/users/[username]", () => {
     test("With `userB` targeting `userA`", async () => {
       await orchestrator.createUser({
         username: "userA",
-        role: "gestor",
       });
 
       const createdUserB = await orchestrator.createUser({
         username: "userB",
-        role: "gestor",
       });
 
       const activatedUserB = await orchestrator.activateUser(createdUserB);
-      const sessionObject2 = await orchestrator.createSession(
-        activatedUserB.id,
-      );
+      const sessionObject2 = await orchestrator.createSession(activatedUserB);
 
       const response = await fetch("http:localhost:3000/api/v1/users/userA", {
         method: "PATCH",
@@ -155,9 +147,7 @@ describe("PATCH /api/v1/users/[username]", () => {
       });
 
       const activatedUser2 = await orchestrator.activateUser(createdUser2);
-      const sessionObject2 = await orchestrator.createSession(
-        activatedUser2.id,
-      );
+      const sessionObject2 = await orchestrator.createSession(activatedUser2);
 
       const response = await fetch(
         `http:localhost:3000/api/v1/users/${createdUser2.username}`,
@@ -187,7 +177,7 @@ describe("PATCH /api/v1/users/[username]", () => {
     test("With unique 'username'", async () => {
       const createdUser = await orchestrator.createUser();
       const activatedUser = await orchestrator.activateUser(createdUser);
-      const sessionObject = await orchestrator.createSession(activatedUser.id);
+      const sessionObject = await orchestrator.createSession(activatedUser);
 
       const response = await fetch(
         `http:localhost:3000/api/v1/users/${createdUser.username}`,
@@ -211,7 +201,6 @@ describe("PATCH /api/v1/users/[username]", () => {
         id: responseBody.id,
         username: "uniqueUser2",
         features: ["create:session", "read:session", "update:user"],
-        role: createdUser.role,
         created_at: responseBody.created_at,
         updated_at: responseBody.updated_at,
       });
@@ -225,7 +214,7 @@ describe("PATCH /api/v1/users/[username]", () => {
     test("With unique 'email'", async () => {
       const createdUser = await orchestrator.createUser();
       const activatedUser = await orchestrator.activateUser(createdUser);
-      const sessionObject = await orchestrator.createSession(activatedUser.id);
+      const sessionObject = await orchestrator.createSession(activatedUser);
 
       const response = await fetch(
         `http:localhost:3000/api/v1/users/${createdUser.username}`,
@@ -249,7 +238,6 @@ describe("PATCH /api/v1/users/[username]", () => {
         id: responseBody.id,
         username: createdUser.username,
         features: ["create:session", "read:session", "update:user"],
-        role: createdUser.role,
         created_at: responseBody.created_at,
         updated_at: responseBody.updated_at,
       });
@@ -258,12 +246,16 @@ describe("PATCH /api/v1/users/[username]", () => {
       expect(Date.parse(responseBody.created_at)).not.toBeNaN();
       expect(Date.parse(responseBody.updated_at)).not.toBeNaN();
 
+      const userInDatabase = await user.findOneByUsername(createdUser.username);
+
+      expect(userInDatabase.email).toBe("uniqueEmail2@email.com");
+
       expect(responseBody.updated_at > responseBody.created_at).toBe(true);
     });
     test("With new 'password'", async () => {
       const createdUser = await orchestrator.createUser();
       const activatedUser = await orchestrator.activateUser(createdUser);
-      const sessionObject = await orchestrator.createSession(activatedUser.id);
+      const sessionObject = await orchestrator.createSession(activatedUser);
 
       const response = await fetch(
         `http:localhost:3000/api/v1/users/${createdUser.username}`,
@@ -287,7 +279,6 @@ describe("PATCH /api/v1/users/[username]", () => {
         id: responseBody.id,
         username: createdUser.username,
         features: ["create:session", "read:session", "update:user"],
-        role: createdUser.role,
         created_at: responseBody.created_at,
         updated_at: responseBody.updated_at,
       });
@@ -312,36 +303,6 @@ describe("PATCH /api/v1/users/[username]", () => {
       expect(correctPasswordAMatch).toBe(true);
       expect(incorrectPasswordAMatch).toBe(false);
     });
-    test("With not allowed role", async () => {
-      const createdUser = await orchestrator.createUser();
-      const activatedUser = await orchestrator.activateUser(createdUser);
-      const sessionObject = await orchestrator.createSession(activatedUser.id);
-
-      const response = await fetch(
-        `http:localhost:3000/api/v1/users/${createdUser.username}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Cookie: `session_id=${sessionObject.token}`,
-          },
-          body: JSON.stringify({
-            role: "Gestor",
-          }),
-        },
-      );
-
-      expect(response.status).toBe(400);
-
-      const responseBody = await response.json();
-
-      expect(responseBody).toEqual({
-        name: "ValidationError",
-        message: "O role informado não é permitido.",
-        action: "Utilize outro role para realizar o cadastro.",
-        status_code: 400,
-      });
-    });
   });
   describe("Privileged user", () => {
     test("With `update:user:other` targeting `defaultUser`", async () => {
@@ -354,7 +315,7 @@ describe("PATCH /api/v1/users/[username]", () => {
       ]);
 
       const privilegedUserSession = await orchestrator.createSession(
-        activatedPrivilegedUser.id,
+        activatedPrivilegedUser,
       );
 
       const defaultUser = await orchestrator.createUser();
@@ -381,7 +342,6 @@ describe("PATCH /api/v1/users/[username]", () => {
         id: defaultUser.id,
         username: "alteradoPorPrivilegiado",
         features: defaultUser.features,
-        role: defaultUser.role,
         created_at: responseBody.created_at,
         updated_at: responseBody.updated_at,
       });

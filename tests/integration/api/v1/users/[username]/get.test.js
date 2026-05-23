@@ -12,7 +12,6 @@ describe("GET /api/v1/users/[username]", () => {
     test("With exact case match", async () => {
       await orchestrator.createUser({
         username: "MesmoCase",
-        role: "gestor",
       });
 
       const response2 = await fetch(
@@ -27,7 +26,6 @@ describe("GET /api/v1/users/[username]", () => {
         id: response2Body.id,
         username: "MesmoCase",
         features: ["read:activation_token"],
-        role: "gestor",
         created_at: response2Body.created_at,
         updated_at: response2Body.updated_at,
       });
@@ -41,7 +39,6 @@ describe("GET /api/v1/users/[username]", () => {
         username: "CaseDiferente",
         email: "case.diferente@email.com",
         password: "senha123",
-        role: "gestor",
       });
 
       const response2 = await fetch(
@@ -56,7 +53,6 @@ describe("GET /api/v1/users/[username]", () => {
         id: response2Body.id,
         username: "CaseDiferente",
         features: ["read:activation_token"],
-        role: "gestor",
         created_at: response2Body.created_at,
         updated_at: response2Body.updated_at,
       });

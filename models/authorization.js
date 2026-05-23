@@ -56,7 +56,6 @@ function filterOutput(user, feature, resource) {
       id: resource.id,
       username: resource.username,
       features: resource.features,
-      role: resource.role,
       created_at: resource.created_at,
       updated_at: resource.updated_at,
     };
@@ -68,7 +67,7 @@ function filterOutput(user, feature, resource) {
         username: resource.username,
         email: resource.email,
         features: resource.features,
-        role: resource.role,
+
         created_at: resource.created_at,
         updated_at: resource.updated_at,
       };
