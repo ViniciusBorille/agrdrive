@@ -71,7 +71,7 @@ O servidor estará disponível em `http://localhost:3000`.
 
 ## Estrutura do projeto
 
-```
+```text
 agrdrive/
 ├── pages/
 │   ├── index.js                # Página principal
