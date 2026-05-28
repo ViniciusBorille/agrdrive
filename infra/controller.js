@@ -106,6 +106,16 @@ function canRequest(feature) {
   };
 }
 
+function requireAuthentication(request, response, next) {
+  if (!request.context?.user?.id) {
+    throw new UnauthorizedError({
+      message: "Você precisa estar autenticado para acessar este recurso.",
+      action: "Faça login para continuar.",
+    });
+  }
+  return next();
+}
+
 const controller = {
   errorHandlers: {
     onNoMatch: onNoMatchHandler,
@@ -115,6 +125,7 @@ const controller = {
   clearSessionCookie,
   injectAnonymousOrUser,
   canRequest,
+  requireAuthentication,
 };
 
 export default controller;
