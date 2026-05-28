@@ -5,6 +5,7 @@ import migrator from "@/models/migrator.js";
 import user from "@/models/user.js";
 import session from "@/models/session.js";
 import activation from "@/models/activation";
+import task from "@/models/task.js";
 
 const emailHttpUrl = `http://${process.env.EMAIL_HTTP_HOST}:${process.env.EMAIL_HTTP_PORT}`;
 
@@ -102,6 +103,18 @@ async function addFeaturesToUser(userObject, features) {
   return updatedUser;
 }
 
+async function createTask(taskObject) {
+  return await task.create({
+    title: taskObject?.title || faker.lorem.words(3),
+    description: taskObject?.description || null,
+    status: taskObject?.status || "PENDING",
+    priority: taskObject?.priority || "MEDIUM",
+    created_by: taskObject?.created_by,
+    assigned_to: taskObject?.assigned_to || null,
+    due_date: taskObject?.due_date || null,
+  });
+}
+
 const orchestrator = {
   waitForAllServices,
   clearDatabase,
@@ -113,6 +126,7 @@ const orchestrator = {
   extractUUID,
   activateUser,
   addFeaturesToUser,
+  createTask,
 };
 
 export default orchestrator;
