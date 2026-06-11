@@ -1,10 +1,22 @@
 import { createRouter } from "next-connect";
+import { z } from "zod";
 import controller from "@/infra/controller.js";
+import validator from "@/infra/validator.js";
 import authentication from "@/models/authentication.js";
 import authorization from "@/models/authorization.js";
 import session from "@/models/session.js";
 
 import { ForbiddenError } from "@/infra/errors.js";
+
+const createSessionSchema = z
+  .object({
+    email: validator.emailSchema,
+    password: z
+      .string("A senha deve ser um texto.")
+      .min(1, "A senha é obrigatória.")
+      .max(72, "A senha deve ter no máximo 72 caracteres."),
+  })
+  .strict("Campos não permitidos foram enviados na requisição.");
 
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
@@ -13,7 +25,7 @@ export default createRouter()
   .handler(controller.errorHandlers);
 
 async function postHandler(request, response) {
-  const userInputValues = request.body;
+  const userInputValues = validator.validate(createSessionSchema, request.body);
 
   const authenticatedUser = await authentication.getUser(
     userInputValues.email,
