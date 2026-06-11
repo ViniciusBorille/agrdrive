@@ -1,16 +1,27 @@
 import { createRouter } from "next-connect";
 import { z } from "zod";
 import controller from "@/infra/controller.js";
+import validator from "@/infra/validator.js";
 import task from "@/models/task.js";
 import { ValidationError } from "@/infra/errors.js";
 
-const createTaskSchema = z.object({
-  title: z.string().min(1).max(150),
-  description: z.string().max(2000).optional(),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
-  assigned_to: z.string().uuid().optional(),
-  due_date: z.iso.datetime({ offset: true }).optional(),
-});
+const createTaskSchema = z
+  .object({
+    title: z
+      .string("O título deve ser um texto.")
+      .trim()
+      .min(1, "O título é obrigatório.")
+      .max(150, "O título deve ter no máximo 150 caracteres."),
+    description: z
+      .string("A descrição deve ser um texto.")
+      .trim()
+      .max(2000, "A descrição deve ter no máximo 2000 caracteres.")
+      .optional(),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+    assigned_to: validator.uuidSchema.optional(),
+    due_date: z.iso.datetime({ offset: true }).optional(),
+  })
+  .strict("Campos não permitidos foram enviados na requisição.");
 
 const viewQuerySchema = z.enum(["assigned", "created", "all"]);
 
@@ -24,16 +35,10 @@ export default createRouter()
 async function postHandler(request, response) {
   const userTryingToPost = request.context.user;
 
-  const parsed = createTaskSchema.safeParse(request.body);
-  if (!parsed.success) {
-    throw new ValidationError({
-      message: parsed.error.issues[0].message,
-      action: "Verifique os dados enviados e tente novamente.",
-    });
-  }
+  const taskInputValues = validator.validate(createTaskSchema, request.body);
 
   const newTask = await task.create({
-    ...parsed.data,
+    ...taskInputValues,
     created_by: userTryingToPost.id,
   });
 

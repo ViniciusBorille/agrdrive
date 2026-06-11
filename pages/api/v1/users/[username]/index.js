@@ -1,8 +1,22 @@
 import { createRouter } from "next-connect";
+import { z } from "zod";
 import controller from "@/infra/controller";
+import validator from "@/infra/validator.js";
 import user from "@/models/user";
 import authorization from "@/models/authorization";
 import { ForbiddenError } from "@/infra/errors";
+
+const updateUserSchema = z
+  .object({
+    username: validator.usernameSchema,
+    email: validator.emailSchema,
+    password: validator.passwordSchema,
+  })
+  .partial()
+  .strict("Campos não permitidos foram enviados na requisição.")
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Pelo menos um campo deve ser fornecido para atualização.",
+  });
 
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
@@ -12,7 +26,10 @@ export default createRouter()
 
 async function getHandler(request, response) {
   const userTryingToGet = request.context.user;
-  const username = request.query.username;
+  const username = validator.validate(
+    validator.usernameSchema,
+    request.query.username,
+  );
   const userFound = await user.findOneByUsername(username);
 
   const secureOutputValues = authorization.filterOutput(
@@ -25,9 +42,10 @@ async function getHandler(request, response) {
 }
 
 async function patchHandler(request, response) {
-  const username = request.query.username;
-  const userInputValues = request.body;
-
+  const username = validator.validate(
+    validator.usernameSchema,
+    request.query.username,
+  );
   const userTryingToPatch = request.context.user;
   const targetUser = await user.findOneByUsername(username);
 
@@ -38,6 +56,8 @@ async function patchHandler(request, response) {
         "Verifique se você possui a feature necessária para atualizar outros usuários.",
     });
   }
+
+  const userInputValues = validator.validate(updateUserSchema, request.body);
 
   const updatedUser = await user.update(username, userInputValues);
 

@@ -1,5 +1,6 @@
 import { createRouter } from "next-connect";
 import controller from "@/infra/controller.js";
+import validator from "@/infra/validator.js";
 import activation from "@/models/activation.js";
 import authorization from "@/models/authorization";
 
@@ -10,7 +11,10 @@ export default createRouter()
 
 async function patchHandler(request, response) {
   const userTryingToPatch = request.context.user;
-  const activationtokenId = request.query.token_id;
+  const activationtokenId = validator.validate(
+    validator.uuidSchema,
+    request.query.token_id,
+  );
 
   const validActivationToken =
     await activation.findOneByValidId(activationtokenId);
