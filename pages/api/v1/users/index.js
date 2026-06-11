@@ -1,8 +1,18 @@
 import { createRouter } from "next-connect";
+import { z } from "zod";
 import controller from "@/infra/controller.js";
+import validator from "@/infra/validator.js";
 import user from "@/models/user.js";
 import activation from "@/models/activation.js";
 import authorization from "@/models/authorization";
+
+const createUserSchema = z
+  .object({
+    username: validator.usernameSchema,
+    email: validator.emailSchema,
+    password: validator.passwordSchema,
+  })
+  .strict("Campos não permitidos foram enviados na requisição.");
 
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
@@ -11,7 +21,7 @@ export default createRouter()
 
 async function postHandler(request, response) {
   const userTryingToPost = request.context.user;
-  const userInputValues = request.body;
+  const userInputValues = validator.validate(createUserSchema, request.body);
   const newUser = await user.create(userInputValues);
 
   const activationToken = await activation.create(newUser.id);

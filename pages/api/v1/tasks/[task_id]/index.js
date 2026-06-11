@@ -1,20 +1,29 @@
 import { createRouter } from "next-connect";
 import { z } from "zod";
 import controller from "@/infra/controller.js";
+import validator from "@/infra/validator.js";
 import task from "@/models/task.js";
-import { ForbiddenError, ValidationError } from "@/infra/errors.js";
+import { ForbiddenError } from "@/infra/errors.js";
 
 const updateTaskSchema = z
   .object({
-    title: z.string().min(1).max(150).optional(),
-    description: z.string().max(2000).nullable().optional(),
-    status: z
-      .enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"])
-      .optional(),
-    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
-    assigned_to: z.string().uuid().nullable().optional(),
-    due_date: z.iso.datetime({ offset: true }).nullable().optional(),
+    title: z
+      .string("O título deve ser um texto.")
+      .trim()
+      .min(1, "O título é obrigatório.")
+      .max(150, "O título deve ter no máximo 150 caracteres."),
+    description: z
+      .string("A descrição deve ser um texto.")
+      .trim()
+      .max(2000, "A descrição deve ter no máximo 2000 caracteres.")
+      .nullable(),
+    status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
+    assigned_to: validator.uuidSchema.nullable(),
+    due_date: z.iso.datetime({ offset: true }).nullable(),
   })
+  .partial()
+  .strict("Campos não permitidos foram enviados na requisição.")
   .refine((data) => Object.keys(data).length > 0, {
     message: "Pelo menos um campo deve ser fornecido para atualização.",
   });
@@ -29,7 +38,10 @@ export default createRouter()
 
 async function getHandler(request, response) {
   const userTryingToGet = request.context.user;
-  const taskId = request.query.task_id;
+  const taskId = validator.validate(
+    validator.uuidSchema,
+    request.query.task_id,
+  );
 
   const taskFound = await task.findOneById(taskId);
 
@@ -49,15 +61,12 @@ async function getHandler(request, response) {
 
 async function patchHandler(request, response) {
   const userTryingToPatch = request.context.user;
-  const taskId = request.query.task_id;
+  const taskId = validator.validate(
+    validator.uuidSchema,
+    request.query.task_id,
+  );
 
-  const parsed = updateTaskSchema.safeParse(request.body);
-  if (!parsed.success) {
-    throw new ValidationError({
-      message: parsed.error.issues[0].message,
-      action: "Verifique os dados enviados e tente novamente.",
-    });
-  }
+  const taskInputValues = validator.validate(updateTaskSchema, request.body);
 
   const taskFound = await task.findOneById(taskId);
 
@@ -72,7 +81,7 @@ async function patchHandler(request, response) {
     });
   }
 
-  if ("assigned_to" in parsed.data && !isCreator) {
+  if ("assigned_to" in taskInputValues && !isCreator) {
     throw new ForbiddenError({
       message: "Somente o criador pode reatribuir a tarefa.",
       action:
@@ -80,13 +89,16 @@ async function patchHandler(request, response) {
     });
   }
 
-  const updatedTask = await task.update(taskId, parsed.data);
+  const updatedTask = await task.update(taskId, taskInputValues);
   return response.status(200).json(updatedTask);
 }
 
 async function deleteHandler(request, response) {
   const userTryingToDelete = request.context.user;
-  const taskId = request.query.task_id;
+  const taskId = validator.validate(
+    validator.uuidSchema,
+    request.query.task_id,
+  );
 
   const taskFound = await task.findOneById(taskId);
 
