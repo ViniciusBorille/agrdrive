@@ -237,9 +237,10 @@ describe("PATCH /api/v1/users/[username]", () => {
       expect(responseBody).toEqual({
         id: responseBody.id,
         username: createdUser.username,
-        features: ["create:session", "read:session", "update:user"],
+        features: ["read:activation_token"],
         created_at: responseBody.created_at,
         updated_at: responseBody.updated_at,
+        emailVerificationRequired: true,
       });
 
       expect(uuidVersion(responseBody.id)).toBe(4);
@@ -249,6 +250,7 @@ describe("PATCH /api/v1/users/[username]", () => {
       const userInDatabase = await user.findOneByUsername(createdUser.username);
 
       expect(userInDatabase.email).toBe("uniqueEmail2@email.com");
+      expect(userInDatabase.features).toEqual(["read:activation_token"]);
 
       expect(responseBody.updated_at > responseBody.created_at).toBe(true);
     });
