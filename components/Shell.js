@@ -600,7 +600,9 @@ export default function Shell({ children }) {
   });
 
   const [showModal, setShowModal] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [toast, setToast] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const toastTimer = useRef(null);
 
   useEffect(() => {
@@ -641,13 +643,22 @@ export default function Shell({ children }) {
   const isHome = router.pathname === "/";
   const isTarefas = router.pathname === "/tarefas";
   const isUsuarios = router.pathname === "/usuarios";
+  const isIndicadores = router.pathname === "/indicadores";
 
-  const pageTitle = isTarefas ? "Tarefas" : isUsuarios ? "Usuários" : "Início";
+  const pageTitle = isTarefas
+    ? "Tarefas"
+    : isUsuarios
+      ? "Usuários"
+      : isIndicadores
+        ? "Indicadores"
+        : "Início";
   const pageSubtitle = isTarefas
     ? "Gestão de tarefas da equipe"
     : isUsuarios
       ? "Controle de acesso e equipe"
-      : "Visão geral da sua operação";
+      : isIndicadores
+        ? "Métricas e desempenho da equipe"
+        : "Visão geral da sua operação";
 
   if (isLoading || (!user && !error)) {
     return <div style={{ minHeight: "100vh", background: "#eef2ef" }} />;
@@ -799,7 +810,8 @@ export default function Shell({ children }) {
           }
         />
         <NavButton
-          disabled
+          active={isIndicadores}
+          onClick={() => router.push("/indicadores")}
           label="Indicadores"
           icon={
             <svg
@@ -824,47 +836,65 @@ export default function Shell({ children }) {
             paddingTop: 14,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 11,
-              padding: "6px 8px",
-            }}
-          >
-            <div
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <button
+              onClick={() => setShowEditProfile(true)}
+              title="Editar perfil"
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 11,
-                background: "#ebc22f",
-                color: "#1c4d3e",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
-                fontSize: 14,
-                flexShrink: 0,
+                gap: 11,
+                flex: 1,
+                minWidth: 0,
+                padding: "6px 8px",
+                borderRadius: 11,
+                background: "transparent",
+                color: "#fff",
+                textAlign: "left",
+                cursor: "pointer",
+                transition: "background .14s",
               }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(255,255,255,.09)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "transparent")
+              }
             >
-              {initials}
-            </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
               <div
                 style={{
-                  fontSize: 13.5,
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  width: 38,
+                  height: 38,
+                  borderRadius: 11,
+                  background: "#ebc22f",
+                  color: "#1c4d3e",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  flexShrink: 0,
                 }}
               >
-                {username}
+                {initials}
               </div>
-              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.6)" }}>
-                Agrônomo
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {username}
+                </div>
+                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.6)" }}>
+                  Agrônomo
+                </div>
               </div>
-            </div>
+            </button>
             <LogoutButton onClick={doLogout} />
           </div>
         </div>
@@ -924,8 +954,10 @@ export default function Shell({ children }) {
               <path d="m21 21-4.3-4.3" />
             </svg>
             <input
-              placeholder="Buscar tarefas, fazendas..."
-              readOnly
+              placeholder="Buscar tarefas..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setSearchQuery("")}
               style={{
                 width: "100%",
                 height: 42,
@@ -939,7 +971,7 @@ export default function Shell({ children }) {
             />
           </div>
 
-          <NotifButton />
+          <NotifButton tasks={assignedTasks} />
 
           <AddTaskButton onClick={openModal} />
         </header>
@@ -952,12 +984,32 @@ export default function Shell({ children }) {
             padding: "28px 30px 40px",
           }}
         >
-          {typeof children === "function" ? children({ openModal }) : children}
+          {typeof children === "function"
+            ? children({ openModal, searchQuery })
+            : children}
         </main>
       </div>
 
       {showModal && (
         <TaskModal onClose={() => setShowModal(false)} onSaved={handleSaved} />
+      )}
+
+      {showEditProfile && user && (
+        <EditProfileModal
+          user={user}
+          onClose={() => setShowEditProfile(false)}
+          onSaved={(emailChanged) => {
+            setShowEditProfile(false);
+            if (emailChanged) {
+              flash(
+                "Email alterado! Verifique sua caixa de entrada para confirmar.",
+              );
+              setTimeout(() => router.replace("/login"), 2000);
+            } else {
+              flash("Perfil atualizado com sucesso!");
+            }
+          }}
+        />
       )}
 
       {toast && (
@@ -999,6 +1051,348 @@ export default function Shell({ children }) {
   );
 }
 
+function EditProfileModal({ user, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    username: user.username,
+    email: user.email || "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    if (!form.username.trim()) {
+      setError("Informe um nome de usuário.");
+      return;
+    }
+    if (form.password && form.password !== form.confirmPassword) {
+      setError("As senhas não coincidem.");
+      return;
+    }
+
+    const body = {};
+    if (form.username !== user.username) body.username = form.username;
+    if (form.email !== (user.email || "")) body.email = form.email;
+    if (form.password) body.password = form.password;
+
+    if (Object.keys(body).length === 0) {
+      onClose();
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/users/${user.username}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || "Erro ao atualizar perfil.");
+        return;
+      }
+      const data = await res.json();
+      onSaved(data.emailVerificationRequired ?? false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(20,40,33,.42)",
+        backdropFilter: "blur(2px)",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: "60px 20px",
+        zIndex: 50,
+        overflowY: "auto",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          background: "#fff",
+          borderRadius: 18,
+          boxShadow: "0 24px 60px rgba(0,0,0,.25)",
+          animation: "agScale .22s ease both",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "22px 24px",
+            borderBottom: "1px solid #eef1ef",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: "#e6f1ea",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#1c6856"
+                strokeWidth="2"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <h2 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>
+              Editar perfil
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 9,
+              color: "#8a938e",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div
+          style={{
+            padding: "22px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#3a443f",
+                marginBottom: 7,
+              }}
+            >
+              Nome de usuário
+            </label>
+            <input
+              value={form.username}
+              onChange={(e) => setField("username", e.target.value)}
+              style={{
+                width: "100%",
+                height: 44,
+                border: "1.5px solid #dde4e0",
+                borderRadius: 11,
+                padding: "0 13px",
+                fontSize: 14,
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#3a443f",
+                marginBottom: 7,
+              }}
+            >
+              Email
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setField("email", e.target.value)}
+              style={{
+                width: "100%",
+                height: 44,
+                border: "1.5px solid #dde4e0",
+                borderRadius: 11,
+                padding: "0 13px",
+                fontSize: 14,
+                outline: "none",
+              }}
+            />
+            <p
+              style={{
+                marginTop: 5,
+                fontSize: 12,
+                color: "#9aa39e",
+              }}
+            >
+              Ao alterar o email, você receberá um link de verificação e será
+              desconectado.
+            </p>
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#3a443f",
+                marginBottom: 7,
+              }}
+            >
+              Nova senha
+            </label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setField("password", e.target.value)}
+              placeholder="Deixe em branco para não alterar"
+              style={{
+                width: "100%",
+                height: 44,
+                border: "1.5px solid #dde4e0",
+                borderRadius: 11,
+                padding: "0 13px",
+                fontSize: 14,
+                outline: "none",
+              }}
+            />
+          </div>
+
+          {form.password && (
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#3a443f",
+                  marginBottom: 7,
+                }}
+              >
+                Confirmar senha
+              </label>
+              <input
+                type="password"
+                value={form.confirmPassword}
+                onChange={(e) => setField("confirmPassword", e.target.value)}
+                style={{
+                  width: "100%",
+                  height: 44,
+                  border: "1.5px solid #dde4e0",
+                  borderRadius: 11,
+                  padding: "0 13px",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+            </div>
+          )}
+
+          {error && (
+            <p
+              style={{
+                fontSize: 13,
+                color: "#c0392b",
+                background: "#fdf0ef",
+                border: "1px solid #f5c6c2",
+                borderRadius: 8,
+                padding: "8px 12px",
+                margin: 0,
+              }}
+            >
+              {error}
+            </p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            padding: "18px 24px",
+            borderTop: "1px solid #eef1ef",
+            background: "#fafbfa",
+            borderRadius: "0 0 18px 18px",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              height: 42,
+              padding: "0 18px",
+              borderRadius: 11,
+              fontSize: 13.5,
+              fontWeight: 600,
+              color: "#5a635e",
+              border: "1.5px solid #dde4e0",
+              background: "#fff",
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              height: 42,
+              padding: "0 20px",
+              borderRadius: 11,
+              fontSize: 13.5,
+              fontWeight: 600,
+              color: "#fff",
+              background: "#1c6856",
+              border: "none",
+              opacity: saving ? 0.65 : 1,
+            }}
+          >
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LogoutButton({ onClick }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -1031,51 +1425,212 @@ function LogoutButton({ onClick }) {
   );
 }
 
-function NotifButton() {
+function NotifButton({ tasks }) {
+  const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e) {
+      if (!containerRef.current?.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const PORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  const pending = (tasks || [])
+    .filter((t) => t.status === "PENDING")
+    .sort((a, b) => {
+      const aOver = fmtDue(a.due_date, a.status).label === "Atrasada";
+      const bOver = fmtDue(b.due_date, b.status).label === "Atrasada";
+      if (aOver !== bOver) return aOver ? -1 : 1;
+      return PORDER[a.priority] - PORDER[b.priority];
+    });
+  const count = pending.length;
+  const shown = pending.slice(0, 8);
+
   return (
-    <button
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: "relative",
-        width: 42,
-        height: 42,
-        borderRadius: 11,
-        border: "1.5px solid #e6ece8",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#5a635e",
-        flexShrink: 0,
-        background: hovered ? "#f4f7f5" : "transparent",
-        transition: "background .14s",
-      }}
-    >
-      <svg
-        width="19"
-        height="19"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-      </svg>
-      <span
+    <div ref={containerRef} style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
-          position: "absolute",
-          top: 9,
-          right: 10,
-          width: 8,
-          height: 8,
-          background: "#d9483b",
-          borderRadius: "50%",
-          border: "2px solid #fff",
+          position: "relative",
+          width: 42,
+          height: 42,
+          borderRadius: 11,
+          border: "1.5px solid #e6ece8",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#5a635e",
+          background: open || hovered ? "#f4f7f5" : "transparent",
+          transition: "background .14s",
         }}
-      />
-    </button>
+      >
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+        </svg>
+        {count > 0 && (
+          <span
+            style={{
+              position: "absolute",
+              top: 9,
+              right: 10,
+              width: 8,
+              height: 8,
+              background: "#d9483b",
+              borderRadius: "50%",
+              border: "2px solid #fff",
+            }}
+          />
+        )}
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "calc(100% + 8px)",
+            width: 320,
+            background: "#fff",
+            border: "1.5px solid #e6ece8",
+            borderRadius: 14,
+            boxShadow: "0 12px 40px rgba(0,0,0,.14)",
+            zIndex: 100,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "13px 16px 10px",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#3a443f",
+              borderBottom: "1px solid #eef1ef",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>Notificações</span>
+            {count > 0 && (
+              <span
+                style={{
+                  background: "#d9483b",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  padding: "1px 7px",
+                }}
+              >
+                {count}
+              </span>
+            )}
+          </div>
+
+          {shown.length === 0 ? (
+            <div
+              style={{
+                padding: "22px 16px",
+                fontSize: 13,
+                color: "#9aa39e",
+                textAlign: "center",
+              }}
+            >
+              Sem tarefas pendentes atribuídas a você.
+            </div>
+          ) : (
+            <div style={{ maxHeight: 360, overflowY: "auto" }}>
+              {shown.map((t) => {
+                const due = fmtDue(t.due_date, t.status);
+                const pm = PRIORITY_META[t.priority];
+                return (
+                  <div
+                    key={t.id}
+                    style={{
+                      padding: "10px 16px",
+                      borderBottom: "1px solid #f4f6f4",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: "#2a3530",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.title}
+                    </div>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          color: due.color,
+                        }}
+                      >
+                        {due.label}
+                      </span>
+                      <span
+                        style={{
+                          width: 3,
+                          height: 3,
+                          borderRadius: "50%",
+                          background: "#d8dedd",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 500,
+                          color: pm.color,
+                        }}
+                      >
+                        {pm.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {pending.length > 8 && (
+                <div
+                  style={{
+                    padding: "10px 16px",
+                    fontSize: 12.5,
+                    color: "#9aa39e",
+                    textAlign: "center",
+                  }}
+                >
+                  + {pending.length - 8} mais tarefas pendentes
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -1059,7 +1059,6 @@ export default function Tarefas() {
   const [fView, setFView] = useState("all");
   const [fStatus, setFStatus] = useState("ALL");
   const [fPriority, setFPriority] = useState("ALL");
-  const [search, setSearch] = useState("");
 
   const { data: user } = useSWR("/api/v1/user", fetcher, {
     revalidateOnFocus: false,
@@ -1077,284 +1076,251 @@ export default function Tarefas() {
     revalidateOnFocus: false,
   });
 
-  let filtered = tasks || [];
-  if (fStatus !== "ALL")
-    filtered = filtered.filter((t) => t.status === fStatus);
-  if (fPriority !== "ALL")
-    filtered = filtered.filter((t) => t.priority === fPriority);
-  if (search.trim()) {
-    const q = search.trim().toLowerCase();
-    filtered = filtered.filter(
-      (t) =>
-        t.title.toLowerCase().includes(q) ||
-        (t.description || "").toLowerCase().includes(q),
-    );
-  }
-
-  const ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-  filtered = [...filtered].sort(
-    (a, b) =>
-      ORDER[a.priority] - ORDER[b.priority] ||
-      (a.due_date || "").localeCompare(b.due_date || ""),
-  );
-
-  const counts = {
-    ALL: tasks?.length ?? 0,
-    PENDING: tasks?.filter((t) => t.status === "PENDING").length ?? 0,
-    IN_PROGRESS: tasks?.filter((t) => t.status === "IN_PROGRESS").length ?? 0,
-    COMPLETED: tasks?.filter((t) => t.status === "COMPLETED").length ?? 0,
-    CANCELLED: tasks?.filter((t) => t.status === "CANCELLED").length ?? 0,
-  };
-
   return (
     <>
       <Head>
         <title>Tarefas · AgrDrive</title>
       </Head>
       <Shell>
-        {({ openModal }) => (
-          <div style={{ maxWidth: 1240, margin: "0 auto" }}>
-            {/* HEADER */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 16,
-                flexWrap: "wrap",
-                marginBottom: 20,
-              }}
-            >
-              <div>
-                <h1
-                  style={{ fontSize: 23, fontWeight: 600, margin: "0 0 3px" }}
-                >
-                  Tarefas
-                </h1>
-                <p style={{ fontSize: 13.5, color: "#6b7670", margin: 0 }}>
-                  {filtered.length} tarefa(s) · atribua e acompanhe prazos com a
-                  equipe
-                </p>
-              </div>
-              <NewTaskButton onClick={openModal} />
-            </div>
-
-            {/* FILTERS ROW 1: view toggle + priority */}
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                flexWrap: "wrap",
-                alignItems: "center",
-                marginBottom: 14,
-              }}
-            >
+        {({ openModal, searchQuery }) => {
+          let filtered = tasks || [];
+          if (fStatus !== "ALL")
+            filtered = filtered.filter((t) => t.status === fStatus);
+          if (fPriority !== "ALL")
+            filtered = filtered.filter((t) => t.priority === fPriority);
+          if (searchQuery?.trim()) {
+            const q = searchQuery.trim().toLowerCase();
+            filtered = filtered.filter(
+              (t) =>
+                t.title.toLowerCase().includes(q) ||
+                (t.description || "").toLowerCase().includes(q),
+            );
+          }
+          const ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+          filtered = [...filtered].sort(
+            (a, b) =>
+              ORDER[a.priority] - ORDER[b.priority] ||
+              (a.due_date || "").localeCompare(b.due_date || ""),
+          );
+          const counts = {
+            ALL: tasks?.length ?? 0,
+            PENDING: tasks?.filter((t) => t.status === "PENDING").length ?? 0,
+            IN_PROGRESS:
+              tasks?.filter((t) => t.status === "IN_PROGRESS").length ?? 0,
+            COMPLETED:
+              tasks?.filter((t) => t.status === "COMPLETED").length ?? 0,
+            CANCELLED:
+              tasks?.filter((t) => t.status === "CANCELLED").length ?? 0,
+          };
+          return (
+            <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+              {/* HEADER */}
               <div
                 style={{
                   display: "flex",
-                  background: "#e3e9e5",
-                  borderRadius: 11,
-                  padding: 4,
-                  gap: 0,
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  marginBottom: 20,
                 }}
               >
-                <ViewTab
-                  active={fView === "all"}
-                  onClick={() => setFView("all")}
-                  label="Todas"
-                />
-                <ViewTab
-                  active={fView === "assigned"}
-                  onClick={() => setFView("assigned")}
-                  label="Atribuídas a mim"
-                />
-                <ViewTab
-                  active={fView === "created"}
-                  onClick={() => setFView("created")}
-                  label="Criadas por mim"
-                />
+                <div>
+                  <h1
+                    style={{ fontSize: 23, fontWeight: 600, margin: "0 0 3px" }}
+                  >
+                    Tarefas
+                  </h1>
+                  <p style={{ fontSize: 13.5, color: "#6b7670", margin: 0 }}>
+                    {filtered.length} tarefa(s) · atribua e acompanhe prazos com
+                    a equipe
+                  </p>
+                </div>
+                <NewTaskButton onClick={openModal} />
               </div>
 
-              <div style={{ position: "relative", marginLeft: "auto" }}>
-                <select
-                  value={fPriority}
-                  onChange={(e) => setFPriority(e.target.value)}
-                  style={{
-                    height: 40,
-                    border: "1.5px solid #e6ece8",
-                    borderRadius: 11,
-                    padding: "0 34px 0 13px",
-                    fontSize: 13,
-                    background: "#fff",
-                    color: "#3a443f",
-                    outline: "none",
-                    appearance: "none",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                >
-                  <option value="ALL">Todas as prioridades</option>
-                  <option value="URGENT">Urgente</option>
-                  <option value="HIGH">Alta</option>
-                  <option value="MEDIUM">Média</option>
-                  <option value="LOW">Baixa</option>
-                </select>
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#8a938e"
-                  strokeWidth="2"
-                  style={{
-                    position: "absolute",
-                    right: 12,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </div>
-            </div>
-
-            {/* FILTERS ROW 2: search + status chips */}
-            <div
-              style={{
-                display: "flex",
-                gap: 9,
-                flexWrap: "wrap",
-                marginBottom: 16,
-                alignItems: "center",
-              }}
-            >
-              <div style={{ position: "relative" }}>
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#9aa39e"
-                  strokeWidth="2"
-                  style={{
-                    position: "absolute",
-                    left: 11,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                  }}
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar..."
-                  style={{
-                    height: 36,
-                    border: "1.5px solid #e6ece8",
-                    borderRadius: 10,
-                    padding: "0 13px 0 32px",
-                    fontSize: 13,
-                    outline: "none",
-                    background: "#fff",
-                    width: 200,
-                  }}
-                />
-              </div>
-
-              <StatusChipFixed
-                active={fStatus === "ALL"}
-                onClick={() => setFStatus("ALL")}
-                label="Todas"
-                count={counts.ALL}
-                activeBg="#e6f1ea"
-                activeBorder="#1c6856"
-              />
-              <StatusChipFixed
-                active={fStatus === "PENDING"}
-                onClick={() => setFStatus("PENDING")}
-                dot="#c9a41f"
-                label="Pendentes"
-                count={counts.PENDING}
-                activeBg="#fbf3da"
-                activeBorder="#c9a41f"
-              />
-              <StatusChipFixed
-                active={fStatus === "IN_PROGRESS"}
-                onClick={() => setFStatus("IN_PROGRESS")}
-                dot="#3a7ca5"
-                label="Em andamento"
-                count={counts.IN_PROGRESS}
-                activeBg="#e6eef6"
-                activeBorder="#3a7ca5"
-              />
-              <StatusChipFixed
-                active={fStatus === "COMPLETED"}
-                onClick={() => setFStatus("COMPLETED")}
-                dot="#34a853"
-                label="Concluídas"
-                count={counts.COMPLETED}
-                activeBg="#e6f1ea"
-                activeBorder="#34a853"
-              />
-              <StatusChipFixed
-                active={fStatus === "CANCELLED"}
-                onClick={() => setFStatus("CANCELLED")}
-                dot="#b3b8b5"
-                label="Canceladas"
-                count={counts.CANCELLED}
-                activeBg="#eef0ef"
-                activeBorder="#9aa39e"
-              />
-            </div>
-
-            {/* TABLE */}
-            <div
-              style={{
-                background: "#fff",
-                border: "1px solid #e6ece8",
-                borderRadius: 16,
-                overflow: "hidden",
-              }}
-            >
-              {/* HEAD */}
+              {/* FILTERS ROW 1: view toggle + priority */}
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "2.4fr 1fr 1.2fr 1fr 40px",
-                  gap: 14,
-                  padding: "13px 20px",
-                  background: "#f6f8f7",
-                  borderBottom: "1px solid #eef1ef",
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  letterSpacing: ".4px",
-                  color: "#8a938e",
-                  textTransform: "uppercase",
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  marginBottom: 14,
                 }}
               >
-                <div>Tarefa</div>
-                <div>Prioridade</div>
-                <div>Status</div>
-                <div>Prazo</div>
-                <div />
+                <div
+                  style={{
+                    display: "flex",
+                    background: "#e3e9e5",
+                    borderRadius: 11,
+                    padding: 4,
+                    gap: 0,
+                  }}
+                >
+                  <ViewTab
+                    active={fView === "all"}
+                    onClick={() => setFView("all")}
+                    label="Todas"
+                  />
+                  <ViewTab
+                    active={fView === "assigned"}
+                    onClick={() => setFView("assigned")}
+                    label="Atribuídas a mim"
+                  />
+                  <ViewTab
+                    active={fView === "created"}
+                    onClick={() => setFView("created")}
+                    label="Criadas por mim"
+                  />
+                </div>
+
+                <div style={{ position: "relative", marginLeft: "auto" }}>
+                  <select
+                    value={fPriority}
+                    onChange={(e) => setFPriority(e.target.value)}
+                    style={{
+                      height: 40,
+                      border: "1.5px solid #e6ece8",
+                      borderRadius: 11,
+                      padding: "0 34px 0 13px",
+                      fontSize: 13,
+                      background: "#fff",
+                      color: "#3a443f",
+                      outline: "none",
+                      appearance: "none",
+                      cursor: "pointer",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <option value="ALL">Todas as prioridades</option>
+                    <option value="URGENT">Urgente</option>
+                    <option value="HIGH">Alta</option>
+                    <option value="MEDIUM">Média</option>
+                    <option value="LOW">Baixa</option>
+                  </select>
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#8a938e"
+                    strokeWidth="2"
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </div>
               </div>
 
-              {/* ROWS */}
-              {!tasks ? (
-                <SkeletonRows />
-              ) : filtered.length === 0 ? (
-                <EmptyState />
-              ) : (
-                filtered.map((t) => (
-                  <TaskRow key={t.id} t={t} userId={userId} />
-                ))
-              )}
+              {/* FILTERS ROW 2: search + status chips */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 9,
+                  flexWrap: "wrap",
+                  marginBottom: 16,
+                  alignItems: "center",
+                }}
+              >
+                <StatusChipFixed
+                  active={fStatus === "ALL"}
+                  onClick={() => setFStatus("ALL")}
+                  label="Todas"
+                  count={counts.ALL}
+                  activeBg="#e6f1ea"
+                  activeBorder="#1c6856"
+                />
+                <StatusChipFixed
+                  active={fStatus === "PENDING"}
+                  onClick={() => setFStatus("PENDING")}
+                  dot="#c9a41f"
+                  label="Pendentes"
+                  count={counts.PENDING}
+                  activeBg="#fbf3da"
+                  activeBorder="#c9a41f"
+                />
+                <StatusChipFixed
+                  active={fStatus === "IN_PROGRESS"}
+                  onClick={() => setFStatus("IN_PROGRESS")}
+                  dot="#3a7ca5"
+                  label="Em andamento"
+                  count={counts.IN_PROGRESS}
+                  activeBg="#e6eef6"
+                  activeBorder="#3a7ca5"
+                />
+                <StatusChipFixed
+                  active={fStatus === "COMPLETED"}
+                  onClick={() => setFStatus("COMPLETED")}
+                  dot="#34a853"
+                  label="Concluídas"
+                  count={counts.COMPLETED}
+                  activeBg="#e6f1ea"
+                  activeBorder="#34a853"
+                />
+                <StatusChipFixed
+                  active={fStatus === "CANCELLED"}
+                  onClick={() => setFStatus("CANCELLED")}
+                  dot="#b3b8b5"
+                  label="Canceladas"
+                  count={counts.CANCELLED}
+                  activeBg="#eef0ef"
+                  activeBorder="#9aa39e"
+                />
+              </div>
+
+              {/* TABLE */}
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #e6ece8",
+                  borderRadius: 16,
+                  overflow: "hidden",
+                }}
+              >
+                {/* HEAD */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2.4fr 1fr 1.2fr 1fr 40px",
+                    gap: 14,
+                    padding: "13px 20px",
+                    background: "#f6f8f7",
+                    borderBottom: "1px solid #eef1ef",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    letterSpacing: ".4px",
+                    color: "#8a938e",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  <div>Tarefa</div>
+                  <div>Prioridade</div>
+                  <div>Status</div>
+                  <div>Prazo</div>
+                  <div />
+                </div>
+
+                {/* ROWS */}
+                {!tasks ? (
+                  <SkeletonRows />
+                ) : filtered.length === 0 ? (
+                  <EmptyState />
+                ) : (
+                  filtered.map((t) => (
+                    <TaskRow key={t.id} t={t} userId={userId} />
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        }}
       </Shell>
     </>
   );
