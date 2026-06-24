@@ -16,8 +16,14 @@ const createUserSchema = z
 
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
+  .get(controller.requireAuthentication, getHandler)
   .post(controller.canRequest("create:user"), postHandler)
   .handler(controller.errorHandlers);
+
+async function getHandler(request, response) {
+  const users = await user.findAll();
+  return response.status(200).json(users);
+}
 
 async function postHandler(request, response) {
   const userTryingToPost = request.context.user;
