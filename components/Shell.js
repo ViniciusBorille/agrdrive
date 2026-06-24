@@ -165,6 +165,10 @@ function TaskModal({ onClose, onSaved }) {
       setError("Informe um título para a tarefa.");
       return;
     }
+    if (form.assignees.length === 0) {
+      setError("Selecione pelo menos um responsável.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -175,7 +179,7 @@ function TaskModal({ onClose, onSaved }) {
         }),
         priority: form.priority,
         ...(form.due_date && { due_date: form.due_date + "T00:00:00.000Z" }),
-        ...(form.assignees.length > 0 && { assigned_to: form.assignees }),
+        assigned_to: form.assignees,
       };
       const res = await fetch("/api/v1/tasks", {
         method: "POST",
@@ -354,7 +358,7 @@ function TaskModal({ onClose, onSaved }) {
               marginBottom: 7,
             }}
           >
-            Responsáveis
+            Responsáveis *
           </label>
           <div
             style={{

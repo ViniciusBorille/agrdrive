@@ -4,7 +4,10 @@ import { NotFoundError } from "@/infra/errors.js";
 async function create(tasksInputValues) {
   const newTask = await runInsertQuery(tasksInputValues);
   if (tasksInputValues.assigned_to) {
-    await runInsertAssigneesQuery(newTask.id, [tasksInputValues.assigned_to]);
+    const ids = Array.isArray(tasksInputValues.assigned_to)
+      ? tasksInputValues.assigned_to
+      : [tasksInputValues.assigned_to];
+    await runInsertAssigneesQuery(newTask.id, ids);
   }
   const assignees = await runSelectAssigneesQuery(newTask.id);
   return { ...newTask, assignees, assigned_to: assignees[0]?.id ?? null };
@@ -139,7 +142,8 @@ async function update(id, tasksInputValues) {
   if ("assigned_to" in tasksInputValues) {
     await runDeleteAssigneesQuery(id);
     if (assigned_to) {
-      await runInsertAssigneesQuery(id, [assigned_to]);
+      const ids = Array.isArray(assigned_to) ? assigned_to : [assigned_to];
+      await runInsertAssigneesQuery(id, ids);
     }
   }
 

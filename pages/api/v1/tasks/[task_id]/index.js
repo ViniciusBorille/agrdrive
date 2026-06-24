@@ -19,7 +19,15 @@ const updateTaskSchema = z
       .nullable(),
     status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]),
     priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
-    assigned_to: validator.uuidSchema.nullable(),
+    assigned_to: validator.uuidSchema
+      .or(
+        z
+          .array(validator.uuidSchema, {
+            invalid_type_error: "O campo responsáveis deve ser uma lista.",
+          })
+          .min(1),
+      )
+      .nullable(),
     due_date: z.iso.datetime({ offset: true }).nullable(),
   })
   .partial()

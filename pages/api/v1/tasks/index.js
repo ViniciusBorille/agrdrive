@@ -18,7 +18,15 @@ const createTaskSchema = z
       .max(2000, "A descrição deve ter no máximo 2000 caracteres.")
       .optional(),
     priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
-    assigned_to: validator.uuidSchema.optional(),
+    assigned_to: validator.uuidSchema
+      .or(
+        z
+          .array(validator.uuidSchema, {
+            invalid_type_error: "O campo responsáveis deve ser uma lista.",
+          })
+          .min(1, "Selecione pelo menos um responsável."),
+      )
+      .optional(),
     due_date: z.iso.datetime({ offset: true }).optional(),
   })
   .strict("Campos não permitidos foram enviados na requisição.");
