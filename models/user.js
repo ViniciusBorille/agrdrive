@@ -269,10 +269,25 @@ async function addFeatures(userId, features) {
   }
 }
 
+async function findAll() {
+  const results = await database.query({
+    text: `
+      SELECT
+        id, username, features, created_at, updated_at
+      FROM
+        users
+      ORDER BY
+        created_at ASC
+    ;`,
+  });
+  return results.rows;
+}
+
 const user = {
   findOneByUsername,
   findOneByEmail,
   findOneById,
+  findAll,
   create,
   update,
   setFeatures,

@@ -38,22 +38,21 @@ async function findOneValidByToken(sessionToken) {
 
 async function create(userId) {
   const token = crypto.randomBytes(48).toString("hex");
-  const expiresAt = new Date(Date.now() + EXPIRATION_IN_MILISECONDS);
 
-  const newSession = await runInsertQuery(token, userId, expiresAt);
+  const newSession = await runInsertQuery(token, userId);
   return newSession;
 
-  async function runInsertQuery(token, userId, expiresAt) {
+  async function runInsertQuery(token, userId) {
     const results = await database.query({
       text: `
             INSERT INTO
                 sessions (token, user_id, expires_at)
             VALUES
-                ($1, $2, $3)
+                ($1, $2, NOW() + ($3 * interval '1 millisecond'))
             RETURNING
                 *
             ;`,
-      values: [token, userId, expiresAt],
+      values: [token, userId, EXPIRATION_IN_MILISECONDS],
     });
 
     return results.rows[0];
@@ -61,25 +60,23 @@ async function create(userId) {
 }
 
 async function renew(sessionId) {
-  const expiresAt = new Date(Date.now() + EXPIRATION_IN_MILISECONDS);
-
-  const renewedSessionObject = await runUpdateQuery(sessionId, expiresAt);
+  const renewedSessionObject = await runUpdateQuery(sessionId);
   return renewedSessionObject;
 
-  async function runUpdateQuery(sessionId, expiresAt) {
+  async function runUpdateQuery(sessionId) {
     const results = await database.query({
       text: `
-        UPDATE  
+        UPDATE
           sessions
         SET
-          expires_at =$2,
+          expires_at = NOW() + ($2 * interval '1 millisecond'),
           updated_at = NOW()
         WHERE
          id = $1
         RETURNING
           *
       ;`,
-      values: [sessionId, expiresAt],
+      values: [sessionId, EXPIRATION_IN_MILISECONDS],
     });
 
     return results.rows[0];

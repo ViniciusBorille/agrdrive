@@ -19,7 +19,15 @@ const updateTaskSchema = z
       .nullable(),
     status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]),
     priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
-    assigned_to: validator.uuidSchema.nullable(),
+    assigned_to: validator.uuidSchema
+      .or(
+        z
+          .array(validator.uuidSchema, {
+            invalid_type_error: "O campo responsáveis deve ser uma lista.",
+          })
+          .min(1),
+      )
+      .nullable(),
     due_date: z.iso.datetime({ offset: true }).nullable(),
   })
   .partial()
@@ -46,7 +54,9 @@ async function getHandler(request, response) {
   const taskFound = await task.findOneById(taskId);
 
   const isCreator = taskFound.created_by === userTryingToGet.id;
-  const isAssignee = taskFound.assigned_to === userTryingToGet.id;
+  const isAssignee = taskFound.assignees?.some(
+    (a) => a.id === userTryingToGet.id,
+  );
 
   if (!isCreator && !isAssignee) {
     throw new ForbiddenError({
@@ -71,7 +81,9 @@ async function patchHandler(request, response) {
   const taskFound = await task.findOneById(taskId);
 
   const isCreator = taskFound.created_by === userTryingToPatch.id;
-  const isAssignee = taskFound.assigned_to === userTryingToPatch.id;
+  const isAssignee = taskFound.assignees?.some(
+    (a) => a.id === userTryingToPatch.id,
+  );
 
   if (!isCreator && !isAssignee) {
     throw new ForbiddenError({

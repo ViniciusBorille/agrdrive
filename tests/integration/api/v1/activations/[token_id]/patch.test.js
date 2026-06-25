@@ -13,7 +13,7 @@ describe("PATCH /api/v1/activations/[token_id]", () => {
   describe("Anonymous user", () => {
     test("With nonexistent token", async () => {
       const response = await fetch(
-        "http://localhost:3000/api/v1/activations/46c68a8a-49d4-4e79-a577-918a1df01ea6",
+        "http://localhost:3000/api/v1/activations/59d0ad37-4a6d-4818-950f-3b27cc64631c",
         {
           method: "PATCH",
         },

@@ -3,6 +3,7 @@ import { z } from "zod";
 import controller from "@/infra/controller";
 import validator from "@/infra/validator.js";
 import user from "@/models/user";
+import activation from "@/models/activation";
 import authorization from "@/models/authorization";
 import { ForbiddenError } from "@/infra/errors";
 
@@ -59,7 +60,19 @@ async function patchHandler(request, response) {
 
   const userInputValues = validator.validate(updateUserSchema, request.body);
 
-  const updatedUser = await user.update(username, userInputValues);
+  const emailChanged =
+    "email" in userInputValues &&
+    userInputValues.email.toLowerCase() !== targetUser.email.toLowerCase();
+
+  let updatedUser = await user.update(username, userInputValues);
+
+  if (emailChanged) {
+    updatedUser = await user.setFeatures(updatedUser.id, [
+      "read:activation_token",
+    ]);
+    const activationToken = await activation.create(updatedUser.id);
+    await activation.sendEmailToUser(updatedUser, activationToken);
+  }
 
   const secureOutputValues = authorization.filterOutput(
     userTryingToPatch,
@@ -67,5 +80,9 @@ async function patchHandler(request, response) {
     updatedUser,
   );
 
-  return response.status(200).json(secureOutputValues);
+  const responseBody = emailChanged
+    ? { ...secureOutputValues, emailVerificationRequired: true }
+    : secureOutputValues;
+
+  return response.status(200).json(responseBody);
 }
