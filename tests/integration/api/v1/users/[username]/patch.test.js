@@ -261,6 +261,57 @@ describe("PATCH /api/v1/users/[username]", () => {
 
       expect(responseBody.updated_at > responseBody.created_at).toBe(true);
     });
+    test("With unchanged 'username' (same value)", async () => {
+      const createdUser = await orchestrator.createUser({
+        username: "meuUsuario",
+      });
+      const activatedUser = await orchestrator.activateUser(createdUser);
+      const sessionObject = await orchestrator.createSession(activatedUser);
+
+      const response = await fetch(
+        `http:localhost:3000/api/v1/users/${createdUser.username}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `session_id=${sessionObject.token}`,
+          },
+          body: JSON.stringify({
+            username: "meuUsuario",
+            password: "novaSenhaValida1",
+          }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+    });
+    test("With unchanged 'username' (different case)", async () => {
+      const createdUser = await orchestrator.createUser({
+        username: "outroUsuario",
+      });
+      const activatedUser = await orchestrator.activateUser(createdUser);
+      const sessionObject = await orchestrator.createSession(activatedUser);
+
+      const response = await fetch(
+        `http:localhost:3000/api/v1/users/${createdUser.username}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `session_id=${sessionObject.token}`,
+          },
+          body: JSON.stringify({
+            username: "OUTROUSUARIO",
+            password: "novaSenhaValida1",
+          }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+
+      const responseBody = await response.json();
+      expect(responseBody.username).toBe("OUTROUSUARIO");
+    });
     test("With new 'password'", async () => {
       const createdUser = await orchestrator.createUser();
       const activatedUser = await orchestrator.activateUser(createdUser);
