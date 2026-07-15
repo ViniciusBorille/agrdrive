@@ -5,6 +5,8 @@ import validator from "@/infra/validator.js";
 import user from "@/models/user";
 import activation from "@/models/activation";
 import authorization from "@/models/authorization";
+import session from "@/models/session.js";
+import logger from "@/infra/logger.js";
 import { ForbiddenError } from "@/infra/errors";
 
 const updateUserSchema = z
@@ -65,6 +67,23 @@ async function patchHandler(request, response) {
     userInputValues.email.toLowerCase() !== targetUser.email.toLowerCase();
 
   let updatedUser = await user.update(username, userInputValues);
+
+  if ("password" in userInputValues) {
+    // Troca de senha invalida todas as sessões do usuário-alvo (A07),
+    // exceto a sessão atual de quem fez a requisição.
+    await session.expireAllByUserId(targetUser.id, {
+      exceptToken: request.cookies?.session_id,
+    });
+  }
+
+  if ("password" in userInputValues || emailChanged) {
+    logger.security("user_credentials_updated", {
+      ...logger.getRequestMetadata(request),
+      user_id: userTryingToPatch.id ?? null,
+      target_user_id: targetUser.id,
+      fields: Object.keys(userInputValues),
+    });
+  }
 
   if (emailChanged) {
     updatedUser = await user.setFeatures(updatedUser.id, [

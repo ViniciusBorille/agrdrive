@@ -2,6 +2,7 @@ import { version as uuidVersion } from "uuid";
 import orchestrator from "@/tests/orchestrator.js";
 import user from "@/models/user.js";
 import password from "@/models/password.js";
+import session from "@/models/session.js";
 
 beforeAll(async () => {
   await orchestrator.waitForAllServices();
@@ -304,6 +305,42 @@ describe("PATCH /api/v1/users/[username]", () => {
 
       expect(correctPasswordAMatch).toBe(true);
       expect(incorrectPasswordAMatch).toBe(false);
+    });
+    test("With new 'password' expiring other sessions", async () => {
+      const createdUser = await orchestrator.createUser();
+      const activatedUser = await orchestrator.activateUser(createdUser);
+
+      const currentSession = await orchestrator.createSession(activatedUser);
+      const otherSession = await orchestrator.createSession(activatedUser);
+
+      const response = await fetch(
+        `http:localhost:3000/api/v1/users/${createdUser.username}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `session_id=${currentSession.token}`,
+          },
+          body: JSON.stringify({
+            password: "newPassword3",
+          }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+
+      // A sessão usada na troca continua válida.
+      const currentSessionInDatabase = await session.findOneValidByToken(
+        currentSession.token,
+      );
+      expect(currentSessionInDatabase.id).toBe(currentSession.id);
+
+      // As demais sessões do usuário foram expiradas.
+      await expect(
+        session.findOneValidByToken(otherSession.token),
+      ).rejects.toMatchObject({
+        name: "UnauthorizedError",
+      });
     });
   });
   describe("Privileged user", () => {

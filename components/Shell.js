@@ -890,9 +890,6 @@ export default function Shell({ children }) {
                 >
                   {username}
                 </div>
-                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.6)" }}>
-                  Agrônomo
-                </div>
               </div>
             </button>
             <LogoutButton onClick={doLogout} />
@@ -972,8 +969,6 @@ export default function Shell({ children }) {
           </div>
 
           <NotifButton tasks={assignedTasks} />
-
-          <AddTaskButton onClick={openModal} />
         </header>
 
         {/* CONTENT */}
@@ -1631,43 +1626,5 @@ function NotifButton({ tasks }) {
         </div>
       )}
     </div>
-  );
-}
-
-function AddTaskButton({ onClick }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        height: 42,
-        background: hovered ? "#1a5e4e" : "#1c6856",
-        color: "#fff",
-        fontSize: 13.5,
-        fontWeight: 600,
-        borderRadius: 11,
-        padding: "0 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 7,
-        flexShrink: 0,
-        boxShadow: "0 4px 12px rgba(28,104,86,.22)",
-        transition: "background .15s",
-      }}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-      >
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-      Nova tarefa
-    </button>
   );
 }

@@ -131,57 +131,6 @@ export default function Login() {
               Agenda de visitas, relatórios técnicos, tarefas entre a equipe e
               indicadores comerciais — tudo em um só lugar.
             </p>
-            <div style={{ display: "flex", gap: 26, marginTop: 34 }}>
-              <div>
-                <div
-                  style={{
-                    fontSize: 26,
-                    fontWeight: 700,
-                    color: "#ebc22f",
-                  }}
-                >
-                  +1.2k
-                </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "rgba(255,255,255,.65)",
-                  }}
-                >
-                  visitas registradas
-                </div>
-              </div>
-              <div>
-                <div
-                  style={{ fontSize: 26, fontWeight: 700, color: "#ebc22f" }}
-                >
-                  38
-                </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "rgba(255,255,255,.65)",
-                  }}
-                >
-                  fazendas atendidas
-                </div>
-              </div>
-              <div>
-                <div
-                  style={{ fontSize: 26, fontWeight: 700, color: "#ebc22f" }}
-                >
-                  12
-                </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "rgba(255,255,255,.65)",
-                  }}
-                >
-                  agrônomos ativos
-                </div>
-              </div>
-            </div>
           </div>
 
           <div
