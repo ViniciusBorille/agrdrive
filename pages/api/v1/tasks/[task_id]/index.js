@@ -39,6 +39,7 @@ const updateTaskSchema = z
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
   .use(controller.requireAuthentication)
+  .use(controller.canRequest("use:tasks"))
   .get(getHandler)
   .patch(patchHandler)
   .delete(deleteHandler)

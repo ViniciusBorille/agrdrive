@@ -20,6 +20,10 @@ const availableFeatures = [
   "create:recovery_token",
   "read:recovery_token",
 
+  // MODULES
+  "use:tasks",
+  "read:indicators",
+
   // MIGRATION
   "create:migration",
   "read:migration",

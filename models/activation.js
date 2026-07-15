@@ -107,10 +107,17 @@ async function activateUserByUserId(userId) {
     });
   }
 
+  // Preserva as permissões de módulo escolhidas no cadastro,
+  // trocando apenas o token de ativação pelas features de sessão.
+  const featuresToKeep = userToActivate.features.filter(
+    (feature) => feature !== "read:activation_token",
+  );
+
   const activatedUser = await user.setFeatures(userId, [
     "create:session",
     "read:session",
     "update:user",
+    ...featuresToKeep,
   ]);
   return activatedUser;
 }

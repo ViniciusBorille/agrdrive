@@ -95,7 +95,13 @@ function extractUUID(text) {
 }
 
 async function activateUser(inactiveUser) {
-  return await activation.activateUserByUserId(inactiveUser.id);
+  await activation.activateUserByUserId(inactiveUser.id);
+  // Conveniência de teste: usuários ativados pelo orchestrator recebem
+  // acesso a todos os módulos padrão.
+  return await user.addFeatures(inactiveUser.id, [
+    "use:tasks",
+    "read:indicators",
+  ]);
 }
 
 async function addFeaturesToUser(userObject, features) {

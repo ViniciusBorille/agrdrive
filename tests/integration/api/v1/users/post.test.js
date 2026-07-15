@@ -2,6 +2,7 @@ import { version as uuidVersion } from "uuid";
 import orchestrator from "@/tests/orchestrator.js";
 import user from "@/models/user.js";
 import password from "@/models/password.js";
+import activation from "@/models/activation.js";
 
 beforeAll(async () => {
   await orchestrator.waitForAllServices();
@@ -205,6 +206,76 @@ describe("POST /api/v1/users", () => {
         action: "Utilize outro username para realizar esta operação.",
         status_code: 400,
       });
+    });
+    test("With module permissions selected", async () => {
+      const adminSessionObject = await createAdminSession();
+
+      const response = await fetch("http:localhost:3000/api/v1/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `session_id=${adminSessionObject.token}`,
+        },
+        body: JSON.stringify({
+          username: "usuarioComModulos",
+          email: "usuario.modulos@email.com",
+          password: "senha123",
+          features: ["use:tasks", "create:user"],
+        }),
+      });
+
+      expect(response.status).toBe(201);
+
+      const responseBody = await response.json();
+
+      expect(responseBody.features).toEqual([
+        "read:activation_token",
+        "use:tasks",
+        "create:user",
+      ]);
+
+      // A ativação troca o token pelas features de sessão e
+      // preserva as permissões de módulo escolhidas.
+      const createdUser = await user.findOneByUsername("usuarioComModulos");
+      const activationResponse = await fetch(
+        `http://localhost:3000/api/v1/activations/${
+          (await activation.create(createdUser.id)).id
+        }`,
+        { method: "PATCH" },
+      );
+      expect(activationResponse.status).toBe(200);
+
+      const activatedUser = await user.findOneByUsername("usuarioComModulos");
+      expect(activatedUser.features).toEqual([
+        "create:session",
+        "read:session",
+        "update:user",
+        "use:tasks",
+        "create:user",
+      ]);
+    });
+    test("With invalid permission", async () => {
+      const adminSessionObject = await createAdminSession();
+
+      const response = await fetch("http:localhost:3000/api/v1/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `session_id=${adminSessionObject.token}`,
+        },
+        body: JSON.stringify({
+          username: "usuarioInvalido",
+          email: "usuario.invalido@email.com",
+          password: "senha123",
+          features: ["create:migration"],
+        }),
+      });
+
+      expect(response.status).toBe(400);
+
+      const responseBody = await response.json();
+
+      expect(responseBody.name).toBe("ValidationError");
     });
   });
 });
