@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Head from "next/head";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function Login() {
   const router = useRouter();
@@ -232,14 +233,12 @@ export default function Login() {
                   Senha
                 </label>
               </div>
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="current-password"
                 style={{
-                  width: "100%",
                   height: 46,
                   border: "1.5px solid #dde4e0",
                   borderRadius: 11,

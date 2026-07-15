@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import useSWR, { mutate } from "swr";
 import Logo from "./Logo";
+import PasswordInput from "./PasswordInput";
 
 const fetcher = (url) =>
   fetch(url).then((r) => {
@@ -1274,8 +1275,7 @@ function EditProfileModal({ user, onClose, onSaved }) {
             >
               Nova senha
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={form.password}
               onChange={(e) => setField("password", e.target.value)}
               placeholder="Deixe em branco para não alterar"
@@ -1304,8 +1304,7 @@ function EditProfileModal({ user, onClose, onSaved }) {
               >
                 Confirmar senha
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 value={form.confirmPassword}
                 onChange={(e) => setField("confirmPassword", e.target.value)}
                 style={{
