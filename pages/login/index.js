@@ -274,18 +274,16 @@ export default function Login() {
 
             <p
               style={{
-                marginTop: 22,
+                marginTop: 18,
                 fontSize: 13.5,
-                color: "#6b7670",
                 textAlign: "center",
               }}
             >
-              Não tem uma conta?{" "}
               <Link
-                href="/cadastro"
+                href="/recuperar-senha"
                 style={{ color: "#1c6856", fontWeight: 600 }}
               >
-                Criar conta
+                Esqueceu a senha?
               </Link>
             </p>
           </div>
