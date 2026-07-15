@@ -6,11 +6,23 @@ import user from "@/models/user.js";
 import activation from "@/models/activation.js";
 import authorization from "@/models/authorization";
 
+// Permissões de módulo que podem ser concedidas no cadastro.
+const GRANTABLE_FEATURES = ["use:tasks", "read:indicators", "create:user"];
+
 const createUserSchema = z
   .object({
     username: validator.usernameSchema,
     email: validator.emailSchema,
     password: validator.passwordSchema,
+    features: z
+      .array(
+        z.enum(
+          GRANTABLE_FEATURES,
+          "Uma ou mais permissões informadas são inválidas.",
+        ),
+        "As permissões devem ser uma lista.",
+      )
+      .optional(),
   })
   .strict("Campos não permitidos foram enviados na requisição.");
 

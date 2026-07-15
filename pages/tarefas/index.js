@@ -1081,7 +1081,7 @@ export default function Tarefas() {
       <Head>
         <title>Tarefas · AgrDrive</title>
       </Head>
-      <Shell>
+      <Shell requireFeature="use:tasks">
         {({ openModal, searchQuery }) => {
           let filtered = tasks || [];
           if (fStatus !== "ALL")

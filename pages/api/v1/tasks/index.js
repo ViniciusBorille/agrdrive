@@ -3,7 +3,8 @@ import { z } from "zod";
 import controller from "@/infra/controller.js";
 import validator from "@/infra/validator.js";
 import task from "@/models/task.js";
-import { ValidationError } from "@/infra/errors.js";
+import authorization from "@/models/authorization.js";
+import { ValidationError, ForbiddenError } from "@/infra/errors.js";
 
 const createTaskSchema = z
   .object({
@@ -36,7 +37,7 @@ const viewQuerySchema = z.enum(["assigned", "created", "all"]);
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
   .use(controller.requireAuthentication)
-  .post(postHandler)
+  .post(controller.canRequest("use:tasks"), postHandler)
   .get(getHandler)
   .handler(controller.errorHandlers);
 
@@ -55,6 +56,18 @@ async function postHandler(request, response) {
 
 async function getHandler(request, response) {
   const userTryingToGet = request.context.user;
+
+  // Leitura liberada para o módulo de tarefas ou de indicadores.
+  if (
+    !authorization.can(userTryingToGet, "use:tasks") &&
+    !authorization.can(userTryingToGet, "read:indicators")
+  ) {
+    throw new ForbiddenError({
+      message: "Você não possui permissão para executar esta ação.",
+      action: 'Verifique se o seu usuário possui a feature "use:tasks"',
+    });
+  }
+
   const rawView = request.query.view ?? "all";
 
   const parsedView = viewQuerySchema.safeParse(rawView);

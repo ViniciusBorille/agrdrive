@@ -442,7 +442,7 @@ export default function Indicadores() {
       <Head>
         <title>Indicadores · AgrDrive</title>
       </Head>
-      <Shell>
+      <Shell requireFeature="read:indicators">
         {() => (
           <div style={{ maxWidth: 1240, margin: "0 auto" }}>
             {/* Header */}

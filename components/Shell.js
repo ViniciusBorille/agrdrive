@@ -589,7 +589,7 @@ function TaskModal({ onClose, onSaved }) {
   );
 }
 
-export default function Shell({ children }) {
+export default function Shell({ children, requireFeature }) {
   const router = useRouter();
   const {
     data: user,
@@ -599,6 +599,13 @@ export default function Shell({ children }) {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
   });
+
+  const userFeatures = user?.features ?? [];
+  const canUseTasks = userFeatures.includes("use:tasks");
+  const canViewIndicators = userFeatures.includes("read:indicators");
+  const canManageUsers = userFeatures.includes("create:user");
+  const missingRequiredFeature =
+    Boolean(user) && requireFeature && !userFeatures.includes(requireFeature);
 
   const [showModal, setShowModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -610,8 +617,12 @@ export default function Shell({ children }) {
     if (error) router.replace("/login");
   }, [error, router]);
 
+  useEffect(() => {
+    if (missingRequiredFeature) router.replace("/");
+  }, [missingRequiredFeature, router]);
+
   const { data: assignedTasks } = useSWR(
-    user ? "/api/v1/tasks?view=assigned" : null,
+    user && canUseTasks ? "/api/v1/tasks?view=assigned" : null,
     fetcher,
     { revalidateOnFocus: false },
   );
@@ -665,6 +676,9 @@ export default function Shell({ children }) {
     return <div style={{ minHeight: "100vh", background: "#eef2ef" }} />;
   }
   if (error) return null;
+  if (missingRequiredFeature) {
+    return <div style={{ minHeight: "100vh", background: "#eef2ef" }} />;
+  }
 
   const username = user?.username || "Usuário";
   const initials = username.substring(0, 2).toUpperCase();
@@ -719,25 +733,27 @@ export default function Shell({ children }) {
             </svg>
           }
         />
-        <NavButton
-          active={isTarefas}
-          onClick={() => router.push("/tarefas")}
-          label="Tarefas"
-          badge={pendingCount}
-          icon={
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M9 11l3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
-          }
-        />
+        {canUseTasks && (
+          <NavButton
+            active={isTarefas}
+            onClick={() => router.push("/tarefas")}
+            label="Tarefas"
+            badge={pendingCount}
+            icon={
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+            }
+          />
+        )}
         <NavButton
           disabled
           label="Agenda de campo"
@@ -790,45 +806,49 @@ export default function Shell({ children }) {
           }
         />
 
-        <NavSection label="GESTÃO" />
-        <NavButton
-          active={isUsuarios}
-          onClick={() => router.push("/usuarios")}
-          label="Usuários"
-          icon={
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11" />
-            </svg>
-          }
-        />
-        <NavButton
-          active={isIndicadores}
-          onClick={() => router.push("/indicadores")}
-          label="Indicadores"
-          icon={
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M3 3v18h18" />
-              <rect x="7" y="11" width="3" height="7" />
-              <rect x="13" y="7" width="3" height="11" />
-            </svg>
-          }
-        />
+        {(canManageUsers || canViewIndicators) && <NavSection label="GESTÃO" />}
+        {canManageUsers && (
+          <NavButton
+            active={isUsuarios}
+            onClick={() => router.push("/usuarios")}
+            label="Usuários"
+            icon={
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11" />
+              </svg>
+            }
+          />
+        )}
+        {canViewIndicators && (
+          <NavButton
+            active={isIndicadores}
+            onClick={() => router.push("/indicadores")}
+            label="Indicadores"
+            icon={
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M3 3v18h18" />
+                <rect x="7" y="11" width="3" height="7" />
+                <rect x="13" y="7" width="3" height="11" />
+              </svg>
+            }
+          />
+        )}
 
         <div
           style={{
@@ -981,7 +1001,7 @@ export default function Shell({ children }) {
           }}
         >
           {typeof children === "function"
-            ? children({ openModal, searchQuery })
+            ? children({ openModal, searchQuery, user })
             : children}
         </main>
       </div>

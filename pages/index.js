@@ -191,10 +191,14 @@ function TaskSkeleton() {
 export default function Home() {
   const router = useRouter();
   const { data: user } = useSWR("/api/v1/user", fetcher);
-  const { data: tasks } = useSWR(
-    user ? "/api/v1/tasks?view=all" : null,
+  const canUseTasks = user?.features?.includes("use:tasks") ?? false;
+  const canSeeTasks =
+    canUseTasks || (user?.features?.includes("read:indicators") ?? false);
+  const { data: tasksData } = useSWR(
+    user && canSeeTasks ? "/api/v1/tasks?view=all" : null,
     fetcher,
   );
+  const tasks = user && !canSeeTasks ? [] : tasksData;
 
   const hours = new Date().getHours();
   const greeting =
@@ -269,25 +273,27 @@ export default function Home() {
                   {todayLong}
                 </p>
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <ActionButton
-                  primary
-                  onClick={openModal}
-                  icon={
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                    >
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                  }
-                  label="Nova tarefa"
-                />
-              </div>
+              {canUseTasks && (
+                <div style={{ display: "flex", gap: 10 }}>
+                  <ActionButton
+                    primary
+                    onClick={openModal}
+                    icon={
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                      >
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    }
+                    label="Nova tarefa"
+                  />
+                </div>
+              )}
             </div>
 
             {/* KPI CARDS */}

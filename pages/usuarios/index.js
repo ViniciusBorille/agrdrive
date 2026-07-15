@@ -2,6 +2,7 @@ import { useState } from "react";
 import Head from "next/head";
 import useSWR from "swr";
 import Shell from "@/components/Shell";
+import PasswordInput from "@/components/PasswordInput";
 
 const fetcher = (url) =>
   fetch(url).then((r) => {
@@ -34,11 +35,30 @@ function isActive(features) {
   return Array.isArray(features) && features.includes("create:session");
 }
 
+const MODULE_PERMISSIONS = [
+  {
+    feature: "use:tasks",
+    module: "Tarefas",
+    description: "Criar e acompanhar tarefas da equipe",
+  },
+  {
+    feature: "read:indicators",
+    module: "Indicadores",
+    description: "Visualizar métricas e desempenho da equipe",
+  },
+  {
+    feature: "create:user",
+    module: "Usuários",
+    description: "Cadastrar e gerenciar usuários (administrador)",
+  },
+];
+
 export default function Usuarios() {
   const [form, setForm] = useState({
     username: "",
     email: "",
     password: "",
+    features: ["use:tasks"],
   });
   const [teamSearch, setTeamSearch] = useState("");
   const [saving, setSaving] = useState(false);
@@ -54,6 +74,14 @@ export default function Usuarios() {
   };
 
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const toggleFeature = (feature) =>
+    setForm((f) => ({
+      ...f,
+      features: f.features.includes(feature)
+        ? f.features.filter((x) => x !== feature)
+        : [...f.features, feature],
+    }));
 
   const handleRegister = async () => {
     if (!form.username.trim() || !form.email.trim() || !form.password) {
@@ -77,6 +105,7 @@ export default function Usuarios() {
           username: form.username.trim().toLowerCase(),
           email: form.email.trim().toLowerCase(),
           password: form.password,
+          features: form.features,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -84,7 +113,12 @@ export default function Usuarios() {
         flash(data.message || "Erro ao cadastrar usuário.");
         return;
       }
-      setForm({ username: "", email: "", password: "" });
+      setForm({
+        username: "",
+        email: "",
+        password: "",
+        features: ["use:tasks"],
+      });
       mutate();
       flash("Usuário cadastrado · convite de ativação enviado.");
     } finally {
@@ -103,7 +137,7 @@ export default function Usuarios() {
       <Head>
         <title>Usuários · AgrDrive</title>
       </Head>
-      <Shell>
+      <Shell requireFeature="create:user">
         {() => (
           <div style={{ maxWidth: 1240, margin: "0 auto" }}>
             <div style={{ marginBottom: 20 }}>
@@ -210,8 +244,7 @@ export default function Usuarios() {
                 />
 
                 <label style={labelStyle}>Senha provisória</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={form.password}
                   onChange={(e) => setField("password", e.target.value)}
                   placeholder="Mín. 8 caracteres"
@@ -219,6 +252,46 @@ export default function Usuarios() {
                   onFocus={(e) => (e.target.style.borderColor = "#1f8069")}
                   onBlur={(e) => (e.target.style.borderColor = "#dde4e0")}
                 />
+
+                <label style={labelStyle}>Permissões por módulo</label>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 7,
+                    border: "1.5px solid #dde4e0",
+                    borderRadius: 11,
+                    padding: "10px",
+                    marginBottom: 20,
+                  }}
+                >
+                  {MODULE_PERMISSIONS.map((perm) => {
+                    const sel = form.features.includes(perm.feature);
+                    return (
+                      <button
+                        key={perm.feature}
+                        type="button"
+                        onClick={() => toggleFeature(perm.feature)}
+                        title={perm.description}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          padding: "7px 14px",
+                          borderRadius: 20,
+                          border: `1.5px solid ${sel ? "#1c6856" : "#dde4e0"}`,
+                          background: sel ? "#e6f1ea" : "#fff",
+                          cursor: "pointer",
+                          fontSize: 13,
+                          color: sel ? "#1c6856" : "#3a443f",
+                          fontWeight: sel ? 600 : 400,
+                          transition: "border-color .15s, background .15s",
+                        }}
+                      >
+                        {perm.module}
+                      </button>
+                    );
+                  })}
+                </div>
 
                 {toast && (
                   <div
