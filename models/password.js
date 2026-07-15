@@ -1,18 +1,18 @@
 import bcryptjs from "bcryptjs";
 
 async function hash(password) {
-  const rounds = getNunbermOfRounds();
+  const rounds = getNumberOfRounds();
   return await bcryptjs.hash(password, rounds);
 }
 
-function getNunbermOfRounds() {
-  let rounds = 1;
-
-  if (process.env.NODE_ENV === "production") {
-    rounds = 14;
+function getNumberOfRounds() {
+  // Seguro por padrão: qualquer ambiente desconhecido (staging, preview etc.)
+  // usa custo alto. Custo baixo apenas em test/development, por velocidade.
+  if (["test", "development"].includes(process.env.NODE_ENV)) {
+    return 1;
   }
 
-  return rounds;
+  return 14;
 }
 
 async function compare(providedPassword, storedPassword) {

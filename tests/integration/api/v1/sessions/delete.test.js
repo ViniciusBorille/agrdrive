@@ -43,6 +43,7 @@ describe("GET /api/v1/session", () => {
         maxAge: -1,
         path: "/",
         httpOnly: true,
+        sameSite: "Lax",
       });
     });
     test("With expired session", async () => {
@@ -81,6 +82,7 @@ describe("GET /api/v1/session", () => {
         maxAge: -1,
         path: "/",
         httpOnly: true,
+        sameSite: "Lax",
       });
     });
     test("With valid session", async () => {
@@ -133,6 +135,7 @@ describe("GET /api/v1/session", () => {
         maxAge: -1,
         path: "/",
         httpOnly: true,
+        sameSite: "Lax",
       });
 
       // Double check assertions

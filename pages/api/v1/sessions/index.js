@@ -2,6 +2,7 @@ import { createRouter } from "next-connect";
 import { z } from "zod";
 import controller from "@/infra/controller.js";
 import validator from "@/infra/validator.js";
+import logger from "@/infra/logger.js";
 import authentication from "@/models/authentication.js";
 import authorization from "@/models/authorization.js";
 import session from "@/models/session.js";
@@ -18,9 +19,18 @@ const createSessionSchema = z
   })
   .strict("Campos não permitidos foram enviados na requisição.");
 
+// Proteção contra brute force / credential stuffing (A07):
+// no máximo 5 tentativas de login por IP+email a cada 15 minutos.
+const loginRateLimit = controller.rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyGenerator: (request, ip) =>
+    `${ip}:${String(request.body?.email ?? "").toLowerCase()}`,
+});
+
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
-  .post(controller.canRequest("create:session"), postHandler)
+  .post(loginRateLimit, controller.canRequest("create:session"), postHandler)
   .delete(deleteHandler)
   .handler(controller.errorHandlers);
 
@@ -41,6 +51,11 @@ async function postHandler(request, response) {
 
   const newSession = await session.create(authenticatedUser.id);
 
+  logger.security("login_success", {
+    ...logger.getRequestMetadata(request),
+    user_id: authenticatedUser.id,
+  });
+
   controller.setSessionCookie(newSession.token, response);
 
   const secureOutputValues = authorization.filterOutput(
@@ -58,6 +73,12 @@ async function deleteHandler(request, response) {
 
   const sessionObject = await session.findOneValidByToken(sessionToken);
   const expiredSession = await session.expireById(sessionObject.id);
+
+  logger.security("logout", {
+    ...logger.getRequestMetadata(request),
+    user_id: sessionObject.user_id,
+  });
+
   controller.clearSessionCookie(response);
 
   const secureOutputValues = authorization.filterOutput(

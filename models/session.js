@@ -3,6 +3,7 @@ import database from "@/infra/database.js";
 import { UnauthorizedError } from "@/infra/errors";
 
 const EXPIRATION_IN_MILISECONDS = 60 * 60 * 24 * 30 * 1000; // 30 Days
+const ABSOLUTE_EXPIRATION_IN_MILISECONDS = 60 * 60 * 24 * 90 * 1000; // 90 Days
 
 async function findOneValidByToken(sessionToken) {
   const sessionFound = await runSelectQuery(sessionToken);
@@ -69,14 +70,21 @@ async function renew(sessionId) {
         UPDATE
           sessions
         SET
-          expires_at = NOW() + ($2 * interval '1 millisecond'),
+          expires_at = LEAST(
+            NOW() + ($2 * interval '1 millisecond'),
+            created_at + ($3 * interval '1 millisecond')
+          ),
           updated_at = NOW()
         WHERE
          id = $1
         RETURNING
           *
       ;`,
-      values: [sessionId, EXPIRATION_IN_MILISECONDS],
+      values: [
+        sessionId,
+        EXPIRATION_IN_MILISECONDS,
+        ABSOLUTE_EXPIRATION_IN_MILISECONDS,
+      ],
     });
 
     return results.rows[0];
@@ -107,12 +115,35 @@ async function expireById(sessionId) {
   }
 }
 
+async function expireAllByUserId(userId, { exceptToken } = {}) {
+  const results = await database.query({
+    text: `
+      UPDATE
+        sessions
+      SET
+        expires_at = NOW() - interval '1 second',
+        updated_at = NOW()
+      WHERE
+        user_id = $1
+        AND expires_at > NOW()
+        AND ($2::text IS NULL OR token <> $2)
+      RETURNING
+        *
+    ;`,
+    values: [userId, exceptToken ?? null],
+  });
+
+  return results.rows;
+}
+
 const session = {
   create,
   EXPIRATION_IN_MILISECONDS,
+  ABSOLUTE_EXPIRATION_IN_MILISECONDS,
   findOneValidByToken,
   renew,
   expireById,
+  expireAllByUserId,
 };
 
 export default session;

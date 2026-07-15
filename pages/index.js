@@ -263,7 +263,7 @@ export default function Home() {
                   style={{ fontSize: 25, fontWeight: 600, margin: "0 0 4px" }}
                 >
                   {greeting}
-                  {firstName ? `, ${firstName}` : ""} 👋
+                  {firstName ? `, ${firstName}` : ""}
                 </h1>
                 <p style={{ fontSize: 14, color: "#6b7670", margin: 0 }}>
                   {todayLong}
@@ -387,7 +387,7 @@ export default function Home() {
                       margin: 0,
                     }}
                   >
-                    Nenhuma tarefa pendente 🎉
+                    Nenhuma tarefa pendente
                   </p>
                 ) : (
                   homeTasks.map((t) => {

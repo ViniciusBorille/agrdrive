@@ -2,6 +2,8 @@ import * as cookie from "cookie";
 import session from "@/models/session.js";
 import user from "@/models/user";
 import authorization from "@/models/authorization.js";
+import rateLimiter from "@/infra/rate-limiter.js";
+import logger from "@/infra/logger.js";
 
 import {
   InternalServerError,
@@ -10,6 +12,7 @@ import {
   NotFoundError,
   UnauthorizedError,
   ForbiddenError,
+  TooManyRequestsError,
 } from "@/infra/errors";
 
 function onNoMatchHandler(request, response) {
@@ -19,14 +22,25 @@ function onNoMatchHandler(request, response) {
 
 function onErrorHandler(error, request, response) {
   if (error instanceof UnauthorizedError) {
+    logger.security("authentication_denied", {
+      ...logger.getRequestMetadata(request),
+      user_id: request.context?.user?.id ?? null,
+    });
     clearSessionCookie(response);
     return response.status(error.statusCode).json(error);
   }
-  if (
-    error instanceof ValidationError ||
-    error instanceof NotFoundError ||
-    error instanceof ForbiddenError
-  ) {
+  if (error instanceof ForbiddenError) {
+    logger.security("access_denied", {
+      ...logger.getRequestMetadata(request),
+      user_id: request.context?.user?.id ?? null,
+    });
+    return response.status(error.statusCode).json(error);
+  }
+  if (error instanceof TooManyRequestsError) {
+    logger.security("rate_limited", logger.getRequestMetadata(request));
+    return response.status(error.statusCode).json(error);
+  }
+  if (error instanceof ValidationError || error instanceof NotFoundError) {
     return response.status(error.statusCode).json(error);
   }
 
@@ -55,6 +69,7 @@ function clearSessionCookie(response) {
     maxAge: -1,
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
+    sameSite: "lax",
   });
   response.setHeader("Set-Cookie", setCookie);
 }
@@ -82,13 +97,7 @@ async function injectAuthenticatedUser(request) {
 
 function injectAnonymousUser(request) {
   const anonymousUserObject = {
-    features: [
-      "create:session",
-      "read:activation_token",
-      "create:user",
-      "create:migration",
-      "read:migration",
-    ],
+    features: ["create:session", "read:activation_token", "create:user"],
   };
 
   request.context = {
@@ -112,6 +121,27 @@ function canRequest(feature) {
   };
 }
 
+function rateLimit({ windowMs, max, keyGenerator }) {
+  const limiter = rateLimiter.createRateLimiter({ windowMs, max });
+
+  return function rateLimitMiddleware(request, response, next) {
+    if (["test", "development"].includes(process.env.NODE_ENV)) {
+      return next();
+    }
+
+    const { ip } = logger.getRequestMetadata(request);
+    const key = keyGenerator ? keyGenerator(request, ip) : ip;
+
+    const { allowed } = limiter.consume(String(key));
+
+    if (!allowed) {
+      throw new TooManyRequestsError();
+    }
+
+    return next();
+  };
+}
+
 function requireAuthentication(request, response, next) {
   if (!request.context?.user?.id) {
     throw new UnauthorizedError({
@@ -131,6 +161,7 @@ const controller = {
   clearSessionCookie,
   injectAnonymousOrUser,
   canRequest,
+  rateLimit,
   requireAuthentication,
 };
 

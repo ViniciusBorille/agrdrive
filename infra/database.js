@@ -18,6 +18,36 @@ async function query(queryObject) {
   }
 }
 
+// Executa `callback(client)` dentro de uma transação (BEGIN/COMMIT).
+// Qualquer erro faz ROLLBACK de todas as queries executadas no callback.
+async function transaction(callback) {
+  let client;
+  try {
+    client = await getNewClient();
+    await client.query("BEGIN");
+    const result = await callback(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      await client?.query("ROLLBACK");
+    } catch {
+      // conexão já encerrada/quebrada — nada a fazer
+    }
+
+    if (error instanceof ServiceError) {
+      throw error;
+    }
+
+    throw new ServiceError({
+      message: "Erro na transação com o Banco de Dados.",
+      cause: error,
+    });
+  } finally {
+    await client?.end();
+  }
+}
+
 async function getNewClient() {
   const client = new Client({
     host: process.env.POSTGRES_HOST,
@@ -34,6 +64,7 @@ async function getNewClient() {
 
 const database = {
   query,
+  transaction,
   getNewClient,
 };
 

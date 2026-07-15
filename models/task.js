@@ -2,18 +2,26 @@ import database from "@/infra/database.js";
 import { NotFoundError } from "@/infra/errors.js";
 
 async function create(tasksInputValues) {
-  const newTask = await runInsertQuery(tasksInputValues);
-  if (tasksInputValues.assigned_to) {
-    const ids = Array.isArray(tasksInputValues.assigned_to)
-      ? tasksInputValues.assigned_to
-      : [tasksInputValues.assigned_to];
-    await runInsertAssigneesQuery(newTask.id, ids);
-  }
+  // Task + assignees são criados na mesma transação: se a inserção dos
+  // assignees falhar, a task não fica órfã no banco.
+  const newTask = await database.transaction(async (client) => {
+    const insertedTask = await runInsertQuery(tasksInputValues, client);
+
+    if (tasksInputValues.assigned_to) {
+      const ids = Array.isArray(tasksInputValues.assigned_to)
+        ? tasksInputValues.assigned_to
+        : [tasksInputValues.assigned_to];
+      await runInsertAssigneesQuery(insertedTask.id, ids, client);
+    }
+
+    return insertedTask;
+  });
+
   const assignees = await runSelectAssigneesQuery(newTask.id);
   return { ...newTask, assignees, assigned_to: assignees[0]?.id ?? null };
 
-  async function runInsertQuery(tasksInputValues) {
-    const results = await database.query({
+  async function runInsertQuery(tasksInputValues, client) {
+    const results = await client.query({
       text: `
         INSERT INTO
           tasks (title, description, status, priority, created_by, due_date)
@@ -137,21 +145,28 @@ async function update(id, tasksInputValues) {
   const currentTask = await findOneById(id);
   const { assigned_to, ...taskFields } = tasksInputValues;
   const taskWithNewValues = { ...currentTask, ...taskFields };
-  const updatedTask = await runUpdateQuery(taskWithNewValues);
 
-  if ("assigned_to" in tasksInputValues) {
-    await runDeleteAssigneesQuery(id);
-    if (assigned_to) {
-      const ids = Array.isArray(assigned_to) ? assigned_to : [assigned_to];
-      await runInsertAssigneesQuery(id, ids);
+  // Atualização da task e troca de assignees na mesma transação: falha no
+  // meio não deixa a task sem responsáveis ou com estado parcial.
+  const updatedTask = await database.transaction(async (client) => {
+    const taskAfterUpdate = await runUpdateQuery(taskWithNewValues, client);
+
+    if ("assigned_to" in tasksInputValues) {
+      await runDeleteAssigneesQuery(id, client);
+      if (assigned_to) {
+        const ids = Array.isArray(assigned_to) ? assigned_to : [assigned_to];
+        await runInsertAssigneesQuery(id, ids, client);
+      }
     }
-  }
+
+    return taskAfterUpdate;
+  });
 
   const assignees = await runSelectAssigneesQuery(id);
   return { ...updatedTask, assignees, assigned_to: assignees[0]?.id ?? null };
 
-  async function runUpdateQuery(task) {
-    const results = await database.query({
+  async function runUpdateQuery(task, client) {
+    const results = await client.query({
       text: `
         UPDATE
           tasks
@@ -214,16 +229,16 @@ async function remove(id) {
   }
 }
 
-async function runInsertAssigneesQuery(taskId, userIds) {
+async function runInsertAssigneesQuery(taskId, userIds, client = database) {
   const placeholders = userIds.map((_, i) => `($1, $${i + 2})`).join(", ");
-  await database.query({
+  await client.query({
     text: `INSERT INTO task_assignees (task_id, user_id) VALUES ${placeholders} ON CONFLICT DO NOTHING`,
     values: [taskId, ...userIds],
   });
 }
 
-async function runDeleteAssigneesQuery(taskId) {
-  await database.query({
+async function runDeleteAssigneesQuery(taskId, client = database) {
+  await client.query({
     text: `DELETE FROM task_assignees WHERE task_id = $1`,
     values: [taskId],
   });
