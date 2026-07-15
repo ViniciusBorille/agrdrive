@@ -15,10 +15,17 @@ describe("Use case: Registration Flow (all successful", () => {
   let activationTokenId;
   let createSessionResponseBody;
   test("Create user account", async () => {
+    const adminUser = await orchestrator.createUser();
+    await orchestrator.activateUser(adminUser);
+    await orchestrator.addFeaturesToUser(adminUser, ["create:user"]);
+    const adminSessionObject = await orchestrator.createSession(adminUser);
+    await orchestrator.deleteAllEmails();
+
     const createUserResponse = await fetch(`${webserver.origin}/api/v1/users`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Cookie: `session_id=${adminSessionObject.token}`,
       },
       body: JSON.stringify({
         username: "RegistrationFlow",
