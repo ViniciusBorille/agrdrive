@@ -645,23 +645,55 @@ export default function Agenda() {
     mutateGoogleStatus();
     flash("Google Calendar desconectado.");
   };
-  const syncNow = async () => {
+  const syncNow = async ({ silent } = {}) => {
     const res = await fetch("/api/v1/google-calendar/sync", {
       method: "POST",
     });
     const data = await res.json().catch(() => ({}));
-    invalidateVisits();
 
     const parts = [];
     if (data.synced) parts.push(`${data.synced} enviada(s) ao Google`);
     if (data.imported) parts.push(`${data.imported} importada(s) do Google`);
 
-    flash(
-      parts.length > 0
-        ? `Sincronizado: ${parts.join(", ")}.`
-        : "Tudo já sincronizado com o Google Calendar.",
-    );
+    if (parts.length > 0) {
+      invalidateVisits();
+      flash(`Sincronizado: ${parts.join(", ")}.`);
+    } else if (!silent) {
+      flash("Tudo já sincronizado com o Google Calendar.");
+    }
   };
+
+  // Sincronização automática: assim que a conexão com o Google é
+  // confirmada, sincroniza e repete em segundo plano a cada 5 minutos
+  // enquanto a página estiver aberta — sem precisar clicar em nada.
+  // Também sincroniza sempre que a aba volta a ficar visível (troca de
+  // aba, restaurar janela minimizada, voltar depois de um tempo fora).
+  const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+  useEffect(() => {
+    if (!googleConnected) return;
+
+    syncNow({ silent: true });
+    const intervalId = setInterval(
+      () => syncNow({ silent: true }),
+      AUTO_SYNC_INTERVAL_MS,
+    );
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncNow({ silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleConnected]);
 
   const visitList = visits || [];
   const monthGrid = buildMonthGrid(
