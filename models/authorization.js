@@ -23,6 +23,7 @@ const availableFeatures = [
   // MODULES
   "use:tasks",
   "read:indicators",
+  "use:agenda",
 
   // MIGRATION
   "create:migration",

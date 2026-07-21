@@ -604,6 +604,7 @@ export default function Shell({ children, requireFeature }) {
   const canUseTasks = userFeatures.includes("use:tasks");
   const canViewIndicators = userFeatures.includes("read:indicators");
   const canManageUsers = userFeatures.includes("create:user");
+  const canUseAgenda = userFeatures.includes("use:agenda");
   const missingRequiredFeature =
     Boolean(user) && requireFeature && !userFeatures.includes(requireFeature);
 
@@ -656,6 +657,7 @@ export default function Shell({ children, requireFeature }) {
   const isTarefas = router.pathname === "/tarefas";
   const isUsuarios = router.pathname === "/usuarios";
   const isIndicadores = router.pathname === "/indicadores";
+  const isAgenda = router.pathname === "/agenda";
 
   const pageTitle = isTarefas
     ? "Tarefas"
@@ -663,14 +665,18 @@ export default function Shell({ children, requireFeature }) {
       ? "Usuários"
       : isIndicadores
         ? "Indicadores"
-        : "Início";
+        : isAgenda
+          ? "Agenda de campo"
+          : "Início";
   const pageSubtitle = isTarefas
     ? "Gestão de tarefas da equipe"
     : isUsuarios
       ? "Controle de acesso e equipe"
       : isIndicadores
         ? "Métricas e desempenho da equipe"
-        : "Visão geral da sua operação";
+        : isAgenda
+          ? "Sincronizada com o Google Calendar"
+          : "Visão geral da sua operação";
 
   if (isLoading || (!user && !error)) {
     return <div style={{ minHeight: "100vh", background: "#eef2ef" }} />;
@@ -754,23 +760,26 @@ export default function Shell({ children, requireFeature }) {
             }
           />
         )}
-        <NavButton
-          disabled
-          label="Agenda de campo"
-          icon={
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <path d="M16 2v4M8 2v4M3 10h18" />
-            </svg>
-          }
-        />
+        {canUseAgenda && (
+          <NavButton
+            active={isAgenda}
+            onClick={() => router.push("/agenda")}
+            label="Agenda de campo"
+            icon={
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+            }
+          />
+        )}
         <NavButton
           disabled
           label="Relatórios de visita"
