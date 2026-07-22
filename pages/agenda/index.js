@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import useSWR, { mutate } from "swr";
-import Shell from "@/components/Shell";
+import Shell, { PRIORITY_META } from "@/components/Shell";
 
 const fetcher = (url) =>
   fetch(url).then((r) => {
@@ -17,6 +17,7 @@ const EVENT_TYPES = {
   PROSPECCAO: { label: "Prospecção", tone: "#3a7ca5" },
   COLETA: { label: "Coleta", tone: "#1f8069" },
   OUTRO: { label: "Outro", tone: "#8a938e" },
+  TAREFA: { label: "Tarefa", tone: "#2b5f93" },
 };
 
 const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -50,6 +51,26 @@ function todayStr() {
 }
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Tarefas atribuídas ao usuário aparecem na Agenda como um item de
+// calendário somente leitura (sem horário de fim — usa o próprio prazo
+// como início e fim), reaproveitando a mesma forma de item das visitas.
+function taskToAgendaItem(t) {
+  const d = new Date(t.due_date);
+  const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return {
+    id: `task-${t.id}`,
+    title: t.title,
+    client: null,
+    event_date: dstr(d.getFullYear(), d.getMonth(), d.getDate()),
+    start_time: time,
+    end_time: time,
+    type: "TAREFA",
+    synced: false,
+    isTask: true,
+    task: t,
+  };
 }
 
 function buildMonthGrid(year, month, visits, selectedDate, today) {
@@ -591,6 +612,11 @@ export default function Agenda() {
   const { data: visits } = useSWR("/api/v1/visits", fetcher, {
     revalidateOnFocus: false,
   });
+  const { data: assignedTasks } = useSWR(
+    "/api/v1/tasks?view=assigned",
+    fetcher,
+    { revalidateOnFocus: false },
+  );
   const { data: googleStatus, mutate: mutateGoogleStatus } = useSWR(
     "/api/v1/google-calendar",
     fetcher,
@@ -629,6 +655,15 @@ export default function Agenda() {
     setEditingVisit(visit);
     setModalDate(visit.event_date);
     setShowModal(true);
+  };
+  // Tarefas são somente leitura na Agenda — editar campos de tarefa
+  // (status, responsáveis, prioridade) é feito na tela de Tarefas.
+  const openAgendaItem = (item) => {
+    if (item.isTask) {
+      router.push("/tarefas");
+      return;
+    }
+    openEditVisitModal(item);
   };
   const closeModal = () => setShowModal(false);
   const handleSaved = () => {
@@ -672,7 +707,10 @@ export default function Agenda() {
   useEffect(() => {
     if (!googleConnected) return;
 
-    syncNow({ silent: true });
+    // setTimeout(…, 0) tira a primeira chamada de dentro do corpo síncrono
+    // do efeito (mesmo padrão já usado no efeito de query params acima),
+    // já que `syncNow` acaba atualizando estado.
+    const timeoutId = setTimeout(() => syncNow({ silent: true }), 0);
     const intervalId = setInterval(
       () => syncNow({ silent: true }),
       AUTO_SYNC_INTERVAL_MS,
@@ -686,16 +724,17 @@ export default function Agenda() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      clearTimeout(timeoutId);
       clearInterval(intervalId);
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleConnected]);
 
-  const visitList = visits || [];
+  const taskAgendaItems = (assignedTasks || [])
+    .filter((t) => t.due_date && t.status !== "CANCELLED")
+    .map(taskToAgendaItem);
+  const visitList = [...(visits || []), ...taskAgendaItems];
   const monthGrid = buildMonthGrid(
     calYear,
     calMonth,
@@ -782,7 +821,7 @@ export default function Agenda() {
                   Agenda de campo
                 </h1>
                 <p style={{ fontSize: 13.5, color: "#6b7670", margin: 0 }}>
-                  Visitas, monitoramentos e reuniões da equipe
+                  Visitas, tarefas atribuídas a você e reuniões da equipe
                 </p>
               </div>
               <button
@@ -1103,7 +1142,7 @@ export default function Agenda() {
                               key={ev.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openEditVisitModal(ev);
+                                openAgendaItem(ev);
                               }}
                               style={{
                                 display: "flex",
@@ -1205,7 +1244,7 @@ export default function Agenda() {
                     {selectedDayVisits.map((ev) => (
                       <div
                         key={ev.id}
-                        onClick={() => openEditVisitModal(ev)}
+                        onClick={() => openAgendaItem(ev)}
                         style={{
                           display: "flex",
                           gap: 11,
@@ -1231,8 +1270,9 @@ export default function Agenda() {
                               color: "#3a443f",
                             }}
                           >
-                            {ev.start_time.slice(0, 5)}–
-                            {ev.end_time.slice(0, 5)}
+                            {ev.isTask
+                              ? `Prazo ${ev.start_time.slice(0, 5)}`
+                              : `${ev.start_time.slice(0, 5)}–${ev.end_time.slice(0, 5)}`}
                           </div>
                           <div
                             style={{
@@ -1250,7 +1290,10 @@ export default function Agenda() {
                               marginTop: 2,
                             }}
                           >
-                            {ev.client || "Sem cliente"}
+                            {ev.isTask
+                              ? (PRIORITY_META[ev.task.priority]?.label ??
+                                "Tarefa")
+                              : ev.client || "Sem cliente"}
                           </div>
                         </div>
                         <div
@@ -1261,11 +1304,23 @@ export default function Agenda() {
                             fontWeight: 600,
                             padding: "3px 8px",
                             borderRadius: 6,
-                            background: ev.synced ? "#e6f1ea" : "#f0f1f1",
-                            color: ev.synced ? "#2c6e49" : "#8a8f8c",
+                            background: ev.isTask
+                              ? "#e6eef6"
+                              : ev.synced
+                                ? "#e6f1ea"
+                                : "#f0f1f1",
+                            color: ev.isTask
+                              ? "#2b5f93"
+                              : ev.synced
+                                ? "#2c6e49"
+                                : "#8a8f8c",
                           }}
                         >
-                          {ev.synced ? "Sincronizado" : "Local"}
+                          {ev.isTask
+                            ? "Tarefa"
+                            : ev.synced
+                              ? "Sincronizado"
+                              : "Local"}
                         </div>
                       </div>
                     ))}
@@ -1351,7 +1406,7 @@ export default function Agenda() {
                       {d.events.map((ev) => (
                         <div
                           key={ev.id}
-                          onClick={() => openEditVisitModal(ev)}
+                          onClick={() => openAgendaItem(ev)}
                           style={{
                             display: "flex",
                             alignItems: "center",
@@ -1377,8 +1432,9 @@ export default function Agenda() {
                               flexShrink: 0,
                             }}
                           >
-                            {ev.start_time.slice(0, 5)}–
-                            {ev.end_time.slice(0, 5)}
+                            {ev.isTask
+                              ? `Prazo ${ev.start_time.slice(0, 5)}`
+                              : `${ev.start_time.slice(0, 5)}–${ev.end_time.slice(0, 5)}`}
                           </span>
                           <span
                             style={{
@@ -1400,7 +1456,11 @@ export default function Agenda() {
                               textOverflow: "ellipsis",
                             }}
                           >
-                            · {ev.client || "Sem cliente"}
+                            ·{" "}
+                            {ev.isTask
+                              ? (PRIORITY_META[ev.task.priority]?.label ??
+                                "Tarefa")
+                              : ev.client || "Sem cliente"}
                           </span>
                         </div>
                       ))}
