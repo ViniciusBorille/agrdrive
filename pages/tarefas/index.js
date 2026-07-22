@@ -665,9 +665,21 @@ function TaskRow({ t, userId }) {
     };
   }, [menuOpen]);
 
+  // Estimativa da altura do menu (maior variante: criador, com os 4
+  // status + editar + excluir). Usada só pra decidir se abre pra cima
+  // ou pra baixo — a `maxHeight` no próprio menu cobre o resto.
+  const MENU_ESTIMATED_HEIGHT = 280;
+
   const openMenu = () => {
     const rect = btnRef.current.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward =
+      spaceBelow < MENU_ESTIMATED_HEIGHT && rect.top > spaceBelow;
+    setMenuPos({
+      top: openUpward ? undefined : rect.bottom + 4,
+      bottom: openUpward ? window.innerHeight - rect.top + 4 : undefined,
+      right: window.innerWidth - rect.right,
+    });
     setMenuOpen((v) => !v);
   };
 
@@ -884,6 +896,7 @@ function TaskRow({ t, userId }) {
               style={{
                 position: "fixed",
                 top: menuPos.top,
+                bottom: menuPos.bottom,
                 right: menuPos.right,
                 zIndex: 9999,
                 background: "#fff",
@@ -891,6 +904,8 @@ function TaskRow({ t, userId }) {
                 borderRadius: 13,
                 boxShadow: "0 8px 28px rgba(0,0,0,.14)",
                 minWidth: 210,
+                maxHeight: "calc(100vh - 16px)",
+                overflowY: "auto",
                 padding: "6px",
               }}
             >
