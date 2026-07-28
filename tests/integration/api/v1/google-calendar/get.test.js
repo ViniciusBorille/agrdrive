@@ -154,6 +154,6 @@ describe("POST /api/v1/google-calendar/sync", () => {
     expect(response.status).toBe(200);
 
     const responseBody = await response.json();
-    expect(responseBody).toEqual({ synced: 0, pending: 0 });
+    expect(responseBody).toEqual({ synced: 0, imported: 0, pending: 0 });
   });
 });
