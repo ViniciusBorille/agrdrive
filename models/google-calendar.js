@@ -1,4 +1,5 @@
 import database from "@/infra/database.js";
+import cryptography from "@/infra/crypto.js";
 import { ServiceError } from "@/infra/errors.js";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -69,13 +70,28 @@ async function refreshAccessToken(refreshToken) {
   return response.json();
 }
 
+// Os tokens ficam cifrados em repouso: um dump do banco não pode ser
+// usado para acessar o Google Calendar de ninguém. Toda linha que sai
+// do banco passa por aqui antes de chegar em quem chamou.
+function decryptRow(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    access_token: cryptography.decrypt(row.access_token),
+    refresh_token: cryptography.decrypt(row.refresh_token),
+  };
+}
+
 async function getCredentials(userId) {
   const results = await database.query({
     text: `SELECT * FROM google_calendar_credentials WHERE user_id = $1 LIMIT 1;`,
     values: [userId],
   });
 
-  return results.rows[0] ?? null;
+  return decryptRow(results.rows[0] ?? null);
 }
 
 async function saveCredentials(userId, tokens) {
@@ -97,13 +113,13 @@ async function saveCredentials(userId, tokens) {
     ;`,
     values: [
       userId,
-      tokens.access_token,
-      tokens.refresh_token ?? null,
+      cryptography.encrypt(tokens.access_token),
+      cryptography.encrypt(tokens.refresh_token ?? null),
       expiresAt,
     ],
   });
 
-  return results.rows[0];
+  return decryptRow(results.rows[0]);
 }
 
 async function deleteCredentials(userId) {
@@ -125,6 +141,16 @@ async function ensureFreshAccessToken(userId) {
 
   if (new Date(credentials.expires_at).getTime() > Date.now()) {
     return credentials.access_token;
+  }
+
+  // O Google só devolve `refresh_token` no primeiro consentimento. Sem
+  // ele não há como renovar: o usuário precisa autorizar de novo.
+  if (!credentials.refresh_token) {
+    throw new ServiceError({
+      message: "O acesso ao Google Calendar expirou.",
+      action: "Reconecte sua conta do Google Calendar.",
+      cause: "Credencial sem `refresh_token` armazenado.",
+    });
   }
 
   const refreshedTokens = await refreshAccessToken(credentials.refresh_token);
