@@ -32,25 +32,23 @@ cd agrdrive
 npm install
 ```
 
-3. Configure as variáveis de ambiente.
-
-`.env.development` é versionado e contém apenas valores locais não secretos
-(Postgres e Mailcatcher do Docker Compose) — ele funciona sem edição.
-
-Credenciais reais nunca entram nesse arquivo. Elas vão em
-`.env.development.local`, que é ignorado pelo Git e carregado
-automaticamente pelo Next.js:
+3. Crie o arquivo de variáveis de ambiente a partir do modelo:
 
 ```bash
-cat >> .env.development.local <<'EOF'
-GOOGLE_CLIENT_ID=seu-client-id
-GOOGLE_CLIENT_SECRET=seu-client-secret
-EOF
+cp .env.development.example .env.development
 ```
 
-O passo a passo para obter essas credenciais no Google Cloud está
-comentado no próprio `.env.development`. Sem elas a Agenda de campo
-funciona como calendário local — só a conexão com o Google Calendar falha.
+**Este passo é obrigatório.** Nenhum arquivo `.env` é versionado — o
+`compose.yaml`, as migrations e o Jest leem o `.env.development`, então sem
+ele nada sobe.
+
+Os valores do modelo já funcionam com o Docker Compose. As únicas variáveis
+em branco são `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, necessárias só
+para a sincronização com o Google Calendar — o passo a passo para obtê-las
+está comentado no próprio arquivo. Sem elas a Agenda de campo funciona como
+calendário local; apenas o botão "Conectar ao Google Calendar" falha.
+
+Em produção as variáveis vêm do ambiente da Vercel, não deste arquivo.
 
 4. Suba os serviços de infraestrutura (PostgreSQL + Mailcatcher):
 
