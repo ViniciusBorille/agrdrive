@@ -218,3 +218,4 @@ Os testes de integração sobem um servidor Next.js isolado e utilizam um banco 
 - Formatação gerenciada pelo Prettier
 - Linting com ESLint
 - Hooks de pré-commit via Husky
+- A

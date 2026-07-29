@@ -4,6 +4,7 @@ import Head from "next/head";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import PasswordInput from "@/components/PasswordInput";
+import LegalFooter from "@/components/LegalFooter";
 
 export default function DefinirNovaSenha() {
   const router = useRouter();
@@ -238,6 +239,8 @@ export default function DefinirNovaSenha() {
               </p>
             </>
           )}
+
+          <LegalFooter />
         </div>
       </div>
     </>

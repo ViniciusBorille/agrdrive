@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import Logo from "@/components/Logo";
+import LegalFooter from "@/components/LegalFooter";
 
 export default function Ativar() {
   const router = useRouter();
@@ -159,6 +160,8 @@ export default function Ativar() {
               </button>
             </>
           )}
+
+          <LegalFooter />
         </div>
       </div>
     </>

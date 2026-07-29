@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import Logo from "./Logo";
 import PasswordInput from "./PasswordInput";
@@ -924,6 +925,8 @@ export default function Shell({ children, requireFeature }) {
             </button>
             <LogoutButton onClick={doLogout} />
           </div>
+
+          <PrivacyLink />
         </div>
       </aside>
 
@@ -1413,6 +1416,48 @@ function EditProfileModal({ user, onClose, onSaved }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Link discreto para a Política de Privacidade, no rodapé da sidebar. A
+// política também é exposta nas telas públicas (components/LegalFooter.js).
+function PrivacyLink() {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Link
+      href="/privacidade"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        marginTop: 10,
+        padding: "6px 8px",
+        borderRadius: 9,
+        fontSize: 11.5,
+        fontWeight: 500,
+        letterSpacing: ".2px",
+        textDecoration: "none",
+        color: hovered ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.45)",
+        background: hovered ? "rgba(255,255,255,.08)" : "transparent",
+        transition: "background .14s, color .14s",
+      }}
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+      Política de Privacidade
+    </Link>
   );
 }
 

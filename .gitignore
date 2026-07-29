@@ -3,3 +3,4 @@ node_modules
 coverage
 .claude
 .env*
+!.env.development.example

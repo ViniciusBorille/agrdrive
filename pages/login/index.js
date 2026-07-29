@@ -4,6 +4,7 @@ import Head from "next/head";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import PasswordInput from "@/components/PasswordInput";
+import LegalFooter from "@/components/LegalFooter";
 
 export default function Login() {
   const router = useRouter();
@@ -286,6 +287,8 @@ export default function Login() {
                 Esqueceu a senha?
               </Link>
             </p>
+
+            <LegalFooter />
           </div>
         </div>
       </div>

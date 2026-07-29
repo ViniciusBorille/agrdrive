@@ -2,6 +2,7 @@ import { useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import LegalFooter from "@/components/LegalFooter";
 
 export default function RecuperarSenha() {
   const [email, setEmail] = useState("");
@@ -210,6 +211,8 @@ export default function RecuperarSenha() {
               </p>
             </>
           )}
+
+          <LegalFooter />
         </div>
       </div>
     </>
