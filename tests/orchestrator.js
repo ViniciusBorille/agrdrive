@@ -6,6 +6,7 @@ import user from "@/models/user.js";
 import session from "@/models/session.js";
 import activation from "@/models/activation";
 import task from "@/models/task.js";
+import visit from "@/models/visit.js";
 
 const emailHttpUrl = `http://${process.env.EMAIL_HTTP_HOST}:${process.env.EMAIL_HTTP_PORT}`;
 
@@ -121,6 +122,18 @@ async function createTask(taskObject) {
   });
 }
 
+async function createVisit(visitObject) {
+  return await visit.create({
+    title: visitObject?.title || faker.lorem.words(3),
+    client: visitObject?.client ?? null,
+    event_date: visitObject?.event_date || "2026-06-11",
+    start_time: visitObject?.start_time || "09:00",
+    end_time: visitObject?.end_time || "10:00",
+    type: visitObject?.type || "OUTRO",
+    created_by: visitObject?.created_by,
+  });
+}
+
 const orchestrator = {
   waitForAllServices,
   clearDatabase,
@@ -133,6 +146,7 @@ const orchestrator = {
   activateUser,
   addFeaturesToUser,
   createTask,
+  createVisit,
 };
 
 export default orchestrator;

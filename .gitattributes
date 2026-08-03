@@ -1,0 +1,11 @@
+# Normaliza as quebras de linha: LF no repositorio, independente do SO.
+# Sem isso, editores no Windows gravam CRLF e o diff vira ruido.
+* text=auto eol=lf
+
+# Binarios: nunca converter.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

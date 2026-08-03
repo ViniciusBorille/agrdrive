@@ -7,7 +7,12 @@ import activation from "@/models/activation.js";
 import authorization from "@/models/authorization";
 
 // Permissões de módulo que podem ser concedidas no cadastro.
-const GRANTABLE_FEATURES = ["use:tasks", "read:indicators", "create:user"];
+const GRANTABLE_FEATURES = [
+  "use:tasks",
+  "read:indicators",
+  "use:agenda",
+  "create:user",
+];
 
 const createUserSchema = z
   .object({

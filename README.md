@@ -32,11 +32,23 @@ cd agrdrive
 npm install
 ```
 
-3. Configure as variáveis de ambiente copiando o arquivo de exemplo:
+3. Crie o arquivo de variáveis de ambiente a partir do modelo:
 
 ```bash
-cp .env.development .env.development.local
+cp .env.development.example .env.development
 ```
+
+**Este passo é obrigatório.** Nenhum arquivo `.env` é versionado — o
+`compose.yaml`, as migrations e o Jest leem o `.env.development`, então sem
+ele nada sobe.
+
+Os valores do modelo já funcionam com o Docker Compose. As únicas variáveis
+em branco são `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, necessárias só
+para a sincronização com o Google Calendar — o passo a passo para obtê-las
+está comentado no próprio arquivo. Sem elas a Agenda de campo funciona como
+calendário local; apenas o botão "Conectar ao Google Calendar" falha.
+
+Em produção as variáveis vêm do ambiente da Vercel, não deste arquivo.
 
 4. Suba os serviços de infraestrutura (PostgreSQL + Mailcatcher):
 
@@ -143,6 +155,29 @@ Tabelas principais:
 - **users** — dados dos usuários (username, email, senha hash, features/permissões)
 - **sessions** — sessões ativas com token e data de expiração (30 dias)
 - **user_activation_tokens** — tokens de ativação de conta por email (15 minutos)
+- **tasks** — tarefas do módulo de Tarefas (soft delete via `deleted_at`)
+- **visits** — compromissos do módulo de Agenda de campo
+- **google_calendar_credentials** — tokens OAuth do Google Calendar, cifrados em repouso
+
+## Segurança
+
+- Senhas com hash bcrypt; sessões por cookie `httpOnly` + `sameSite=lax`.
+- Rate limit em login, cadastro e recuperação de senha.
+- Tokens OAuth do Google Calendar são cifrados com AES-256-GCM antes de
+  chegar ao banco (`infra/crypto.js`). A chave vem de `ENCRYPTION_KEY`.
+  O valor em `.env.development` é público e serve só para desenvolvimento
+  e CI — **em produção, gere uma chave própria** e injete por gerenciador
+  de segredos:
+
+  ```bash
+  node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+  ```
+
+  Trocar a chave invalida os tokens já gravados: os usuários precisam
+  reconectar a conta do Google.
+
+- O fluxo OAuth é protegido contra CSRF por um `state` aleatório guardado
+  em cookie `httpOnly` e conferido no callback.
 
 ## Autorização
 
@@ -183,3 +218,4 @@ Os testes de integração sobem um servidor Next.js isolado e utilizam um banco 
 - Formatação gerenciada pelo Prettier
 - Linting com ESLint
 - Hooks de pré-commit via Husky
+- A

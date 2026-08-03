@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import Logo from "./Logo";
 import PasswordInput from "./PasswordInput";
@@ -604,6 +605,7 @@ export default function Shell({ children, requireFeature }) {
   const canUseTasks = userFeatures.includes("use:tasks");
   const canViewIndicators = userFeatures.includes("read:indicators");
   const canManageUsers = userFeatures.includes("create:user");
+  const canUseAgenda = userFeatures.includes("use:agenda");
   const missingRequiredFeature =
     Boolean(user) && requireFeature && !userFeatures.includes(requireFeature);
 
@@ -656,6 +658,7 @@ export default function Shell({ children, requireFeature }) {
   const isTarefas = router.pathname === "/tarefas";
   const isUsuarios = router.pathname === "/usuarios";
   const isIndicadores = router.pathname === "/indicadores";
+  const isAgenda = router.pathname === "/agenda";
 
   const pageTitle = isTarefas
     ? "Tarefas"
@@ -663,14 +666,18 @@ export default function Shell({ children, requireFeature }) {
       ? "Usuários"
       : isIndicadores
         ? "Indicadores"
-        : "Início";
+        : isAgenda
+          ? "Agenda de campo"
+          : "Início";
   const pageSubtitle = isTarefas
     ? "Gestão de tarefas da equipe"
     : isUsuarios
       ? "Controle de acesso e equipe"
       : isIndicadores
         ? "Métricas e desempenho da equipe"
-        : "Visão geral da sua operação";
+        : isAgenda
+          ? "Sincronizada com o Google Calendar"
+          : "Visão geral da sua operação";
 
   if (isLoading || (!user && !error)) {
     return <div style={{ minHeight: "100vh", background: "#eef2ef" }} />;
@@ -754,23 +761,26 @@ export default function Shell({ children, requireFeature }) {
             }
           />
         )}
-        <NavButton
-          disabled
-          label="Agenda de campo"
-          icon={
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <path d="M16 2v4M8 2v4M3 10h18" />
-            </svg>
-          }
-        />
+        {canUseAgenda && (
+          <NavButton
+            active={isAgenda}
+            onClick={() => router.push("/agenda")}
+            label="Agenda de campo"
+            icon={
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+            }
+          />
+        )}
         <NavButton
           disabled
           label="Relatórios de visita"
@@ -915,6 +925,8 @@ export default function Shell({ children, requireFeature }) {
             </button>
             <LogoutButton onClick={doLogout} />
           </div>
+
+          <PrivacyLink />
         </div>
       </aside>
 
@@ -1404,6 +1416,48 @@ function EditProfileModal({ user, onClose, onSaved }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Link discreto para a Política de Privacidade, no rodapé da sidebar. A
+// política também é exposta nas telas públicas (components/LegalFooter.js).
+function PrivacyLink() {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Link
+      href="/privacidade"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        marginTop: 10,
+        padding: "6px 8px",
+        borderRadius: 9,
+        fontSize: 11.5,
+        fontWeight: 500,
+        letterSpacing: ".2px",
+        textDecoration: "none",
+        color: hovered ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.45)",
+        background: hovered ? "rgba(255,255,255,.08)" : "transparent",
+        transition: "background .14s, color .14s",
+      }}
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+      Política de Privacidade
+    </Link>
   );
 }
 

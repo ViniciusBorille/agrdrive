@@ -1,5 +1,11 @@
-import { Client } from "pg";
+import { Client, types } from "pg";
 import { ServiceError } from "@/infra/errors";
+
+// OID 1082 = "date". Por padrão o pg converte a coluna `date` para um
+// objeto Date em horário local e depois `JSON.stringify` converte para UTC,
+// podendo deslocar o dia em fusos com offset negativo. Mantemos a string
+// "AAAA-MM-DD" que o Postgres já retorna, sem nenhuma conversão de fuso.
+types.setTypeParser(1082, (value) => value);
 
 async function query(queryObject) {
   let client;

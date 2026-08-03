@@ -15,4 +15,10 @@ jobs:
 
       - run: npm ci
 
+      # `.env.development` não é versionado, mas o compose, as migrations
+      # e o jest leem dele. O example tem tudo que a suíte precisa — só
+      # as credenciais do Google ficam em branco, e nenhum teste chama o
+      # Google de verdade.
+      - run: cp .env.development.example .env.development
+
       - run: npm test

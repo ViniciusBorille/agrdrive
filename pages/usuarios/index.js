@@ -47,6 +47,11 @@ const MODULE_PERMISSIONS = [
     description: "Visualizar métricas e desempenho da equipe",
   },
   {
+    feature: "use:agenda",
+    module: "Agenda de campo",
+    description: "Agendar e gerenciar visitas de campo",
+  },
+  {
     feature: "create:user",
     module: "Usuários",
     description: "Cadastrar e gerenciar usuários (administrador)",
