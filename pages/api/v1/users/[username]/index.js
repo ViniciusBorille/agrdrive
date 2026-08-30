@@ -23,7 +23,9 @@ const updateUserSchema = z
 
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
-  .get(getHandler)
+  // Exige login para não expor a lista de usuários e suas permissões
+  // (inclusive quem é admin) a visitantes anônimos.
+  .get(controller.requireAuthentication, getHandler)
   .patch(controller.canRequest("update:user"), patchHandler)
   .handler(controller.errorHandlers);
 

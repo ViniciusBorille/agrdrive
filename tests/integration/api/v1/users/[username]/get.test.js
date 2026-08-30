@@ -7,15 +7,51 @@ beforeAll(async () => {
   await orchestrator.runPendingMigrations();
 });
 
+async function createAuthenticatedSession() {
+  const createdUser = await orchestrator.createUser();
+  const activatedUser = await orchestrator.activateUser(createdUser);
+  return await orchestrator.createSession(activatedUser);
+}
+
 describe("GET /api/v1/users/[username]", () => {
   describe("Anonymous user", () => {
+    test("Retrieving another user", async () => {
+      await orchestrator.createUser({
+        username: "UsuarioProtegido",
+      });
+
+      const response = await fetch(
+        "http:localhost:3000/api/v1/users/UsuarioProtegido",
+      );
+
+      expect(response.status).toBe(401);
+
+      const responseBody = await response.json();
+
+      expect(responseBody).toEqual({
+        name: "UnauthorizedError",
+        message: "Você precisa estar autenticado para acessar este recurso.",
+        action: "Faça login para continuar.",
+        status_code: 401,
+      });
+    });
+  });
+
+  describe("Authenticated user", () => {
     test("With exact case match", async () => {
+      const sessionObject = await createAuthenticatedSession();
+
       await orchestrator.createUser({
         username: "MesmoCase",
       });
 
       const response2 = await fetch(
         "http:localhost:3000/api/v1/users/MesmoCase",
+        {
+          headers: {
+            Cookie: `session_id=${sessionObject.token}`,
+          },
+        },
       );
 
       expect(response2.status).toBe(200);
@@ -35,6 +71,8 @@ describe("GET /api/v1/users/[username]", () => {
       expect(Date.parse(response2Body.updated_at)).not.toBeNaN();
     });
     test("With case mismatch", async () => {
+      const sessionObject = await createAuthenticatedSession();
+
       await orchestrator.createUser({
         username: "CaseDiferente",
         email: "case.diferente@email.com",
@@ -43,6 +81,11 @@ describe("GET /api/v1/users/[username]", () => {
 
       const response2 = await fetch(
         "http:localhost:3000/api/v1/users/casediferente",
+        {
+          headers: {
+            Cookie: `session_id=${sessionObject.token}`,
+          },
+        },
       );
 
       expect(response2.status).toBe(200);
@@ -62,8 +105,15 @@ describe("GET /api/v1/users/[username]", () => {
       expect(Date.parse(response2Body.updated_at)).not.toBeNaN();
     });
     test("With nonexistent username", async () => {
+      const sessionObject = await createAuthenticatedSession();
+
       const response = await fetch(
         "http:localhost:3000/api/v1/users/UsuarioInexistente",
+        {
+          headers: {
+            Cookie: `session_id=${sessionObject.token}`,
+          },
+        },
       );
 
       expect(response.status).toBe(404);
