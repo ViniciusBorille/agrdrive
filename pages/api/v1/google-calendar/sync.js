@@ -8,20 +8,11 @@ const IMPORT_WINDOW_PAST_DAYS = 30;
 const IMPORT_WINDOW_FUTURE_DAYS = 180;
 const DAY_IN_MILISECONDS = 24 * 60 * 60 * 1000;
 
-// Cada sincronização dispara várias chamadas à API do Google e vários
-// queries. Limita por usuário: 10 sincronizações a cada 5 minutos.
-const syncRateLimit = controller.rateLimit({
-  name: "google-calendar-sync",
-  windowMs: 5 * 60 * 1000,
-  max: 10,
-  keyGenerator: (request) => request.context.user.id,
-});
-
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
   .use(controller.requireAuthentication)
   .use(controller.canRequest("use:agenda"))
-  .post(syncRateLimit, postHandler)
+  .post(postHandler)
   .handler(controller.errorHandlers);
 
 async function postHandler(request, response) {

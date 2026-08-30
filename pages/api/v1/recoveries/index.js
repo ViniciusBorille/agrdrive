@@ -12,20 +12,9 @@ const createRecoverySchema = z
   })
   .strict("Campos não permitidos foram enviados na requisição.");
 
-// Anti-abuso na recuperação de senha (A07): limita o disparo de
-// e-mails de recuperação — 10 solicitações por IP por hora.
-const recoveryRateLimit = controller.rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-});
-
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
-  .post(
-    recoveryRateLimit,
-    controller.canRequest("create:recovery_token"),
-    postHandler,
-  )
+  .post(controller.canRequest("create:recovery_token"), postHandler)
   .handler(controller.errorHandlers);
 
 async function postHandler(request, response) {
