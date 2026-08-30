@@ -111,10 +111,18 @@ function decrypt(encryptedValue) {
   }
 }
 
+// Hash de mão única para tokens de credencial (sessão, ativação,
+// recuperação): o banco guarda apenas o hash, então um dump não permite
+// usar os tokens. Não serve para senhas — para senhas, use bcrypt.
+function sha256(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
 const cryptography = {
   encrypt,
   decrypt,
   isEncrypted,
+  sha256,
 };
 
 export default cryptography;

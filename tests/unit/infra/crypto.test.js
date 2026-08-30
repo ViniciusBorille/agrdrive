@@ -105,6 +105,29 @@ describe("infra/crypto.js", () => {
     });
   });
 
+  describe(".sha256()", () => {
+    test("é determinístico e devolve 64 caracteres hex", () => {
+      const digest = cryptography.sha256("token-de-sessao");
+
+      expect(digest).toMatch(/^[0-9a-f]{64}$/);
+      expect(cryptography.sha256("token-de-sessao")).toBe(digest);
+    });
+
+    test("entradas diferentes geram digests diferentes", () => {
+      expect(cryptography.sha256("token-a")).not.toBe(
+        cryptography.sha256("token-b"),
+      );
+    });
+
+    test("não depende da ENCRYPTION_KEY", () => {
+      const digest = cryptography.sha256("token-de-sessao");
+
+      delete process.env.ENCRYPTION_KEY;
+
+      expect(cryptography.sha256("token-de-sessao")).toBe(digest);
+    });
+  });
+
   describe("configuração da chave", () => {
     test("falha quando ENCRYPTION_KEY não está definida", () => {
       delete process.env.ENCRYPTION_KEY;
@@ -119,6 +142,18 @@ describe("infra/crypto.js", () => {
         Buffer.from("chave-curta").toString("base64");
 
       expect(() => cryptography.encrypt("x")).toThrow(
+        expect.objectContaining({ name: "InternalServerError" }),
+      );
+    });
+
+    // Erro de configuração e dado corrompido são coisas diferentes: o
+    // primeiro precisa chegar como InternalServerError para não sugerir
+    // ao usuário que reconecte a integração à toa.
+    test("no decrypt, erro de configuração não vira ServiceError", () => {
+      const encrypted = cryptography.encrypt("token");
+      delete process.env.ENCRYPTION_KEY;
+
+      expect(() => cryptography.decrypt(encrypted)).toThrow(
         expect.objectContaining({ name: "InternalServerError" }),
       );
     });

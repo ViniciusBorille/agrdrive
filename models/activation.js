@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import email from "@/infra/email.js";
 import database from "@/infra/database.js";
+import cryptography from "@/infra/crypto.js";
 import webserver from "@/infra/webserver.js";
 import { ForbiddenError, NotFoundError } from "@/infra/errors.js";
 import user from "@/models/user.js";
@@ -7,12 +9,14 @@ import authorization from "@/models/authorization.js";
 
 const EXPIRATION_IN_MILISECONDS = 60 * 15 * 1000; // 15 minutes
 
-async function findOneByValidId(tokenId) {
-  const activationTokenObject = await runSelectQuery(tokenId);
+// O link do e-mail carrega o token cru; o banco guarda apenas o SHA-256,
+// então um dump não permite ativar contas de terceiros.
+async function findOneValidByToken(tokenValue) {
+  const activationTokenObject = await runSelectQuery(tokenValue);
 
   return activationTokenObject;
 
-  async function runSelectQuery(tokenId) {
+  async function runSelectQuery(tokenValue) {
     const results = await database.query({
       text: `
                 SELECT
@@ -20,13 +24,13 @@ async function findOneByValidId(tokenId) {
                 FROM
                     user_activation_tokens
                 WHERE
-                    id = $1
+                    token_hash = $1
                     AND expires_at > NOW()
                     AND used_at IS NULL
                 LIMIT
                     1
             ;`,
-      values: [tokenId],
+      values: [cryptography.sha256(tokenValue)],
     });
 
     if (results.rowCount === 0) {
@@ -43,21 +47,24 @@ async function findOneByValidId(tokenId) {
 
 async function create(userId) {
   const expireAt = new Date(Date.now() + EXPIRATION_IN_MILISECONDS);
+  const token = randomUUID();
 
-  const newToken = await runInsertQuery(userId, expireAt);
-  return newToken;
+  const newToken = await runInsertQuery(userId, expireAt, token);
 
-  async function runInsertQuery(userId, expireAt) {
+  // Devolve o token cru (para o link do e-mail); no banco fica só o hash.
+  return { ...newToken, token };
+
+  async function runInsertQuery(userId, expireAt, token) {
     const results = await database.query({
       text: `
                 INSERT INTO
-                    user_activation_tokens (user_id, expires_at)
+                    user_activation_tokens (user_id, expires_at, token_hash)
                 VALUES
-                    ($1, $2)
+                    ($1, $2, $3)
                 RETURNING
                     *
             ;`,
-      values: [userId, expireAt],
+      values: [userId, expireAt, cryptography.sha256(token)],
     });
 
     return results.rows[0];
@@ -71,7 +78,7 @@ async function sendEmailToUser(user, activationToken) {
     subject: "Ative seu cadastro no AgrDrive!",
     text: `${user.username}, clique no link abaixo para ativar seu cadastro no AgrDrive:
         
-${webserver.origin}/ativar/${activationToken.id}
+${webserver.origin}/ativar/${activationToken.token}
 
 Atenciosamente,
 Equipe AgrDrive`,
@@ -125,7 +132,7 @@ async function activateUserByUserId(userId) {
 const activation = {
   sendEmailToUser,
   create,
-  findOneByValidId,
+  findOneValidByToken,
   markTokenAsUsed,
   activateUserByUserId,
   EXPIRATION_IN_MILISECONDS,
