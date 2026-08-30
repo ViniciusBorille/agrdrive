@@ -298,6 +298,81 @@ describe("models/google-calendar.js", () => {
     });
   });
 
+  // Esta é a única prova que autoriza apagar uma visita local, então o
+  // conservadorismo dela é o que separa "sincronizar" de "perder dados".
+  describe(".wasEventDeleted()", () => {
+    function validCredentials() {
+      database.query.mockResolvedValueOnce({
+        rows: [
+          storedCredentials({
+            accessToken: "valid-token",
+            refreshToken: "refresh-token",
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          }),
+        ],
+      });
+    }
+
+    test("confirma a exclusão quando o Google devolve status cancelled", async () => {
+      validCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "evento-1", status: "cancelled" }),
+      });
+
+      await expect(
+        googleCalendar.wasEventDeleted("user-1", "evento-1"),
+      ).resolves.toBe(true);
+    });
+
+    test("não confirma quando o evento continua ativo", async () => {
+      validCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "evento-1", status: "confirmed" }),
+      });
+
+      await expect(
+        googleCalendar.wasEventDeleted("user-1", "evento-1"),
+      ).resolves.toBe(false);
+    });
+
+    // 404/410 significam "não existe neste calendário", e é exatamente o
+    // que o Google responde para os eventos da conta anterior depois de
+    // reconectar com outra conta. Tratar isso como exclusão apagaria a
+    // agenda inteira do usuário numa troca de conta.
+    test.each([404, 410])(
+      "não confirma quando o Google responde %i",
+      async (status) => {
+        validCredentials();
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status,
+          text: async () => "Not Found",
+        });
+
+        await expect(
+          googleCalendar.wasEventDeleted("user-1", "evento-de-outra-conta"),
+        ).resolves.toBe(false);
+      },
+    );
+
+    test("propaga ServiceError quando o Google falha por outro motivo", async () => {
+      validCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "Internal Server Error",
+      });
+
+      await expect(
+        googleCalendar.wasEventDeleted("user-1", "evento-1"),
+      ).rejects.toMatchObject({ name: "ServiceError" });
+    });
+  });
+
   describe(".fromGoogleEvent()", () => {
     test("converts a timed event into a visit", () => {
       const visit = googleCalendar.fromGoogleEvent({

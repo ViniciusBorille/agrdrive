@@ -136,11 +136,11 @@ async function pruneDeletedGoogleEvents(user, googleEvents, { from, to }) {
     if (liveGoogleEventIds.has(visitInWindow.google_event_id)) continue;
 
     try {
-      const googleEvent = await googleCalendar.getEvent(
+      const wasDeleted = await googleCalendar.wasEventDeleted(
         user.id,
         visitInWindow.google_event_id,
       );
-      if (googleEvent && googleEvent.status !== "cancelled") continue;
+      if (!wasDeleted) continue;
     } catch (error) {
       if (!(error instanceof ServiceError)) throw error;
       // Melhor esforço: sem confirmação, a visita local é preservada.
