@@ -284,6 +284,32 @@ function fromGoogleEvent(googleEvent) {
   };
 }
 
+// Devolve `null` quando o evento não existe mais no Google (apagado ou
+// já expurgado da lixeira). Eventos apagados que ainda estão na lixeira
+// respondem 200 com `status: "cancelled"` — quem chama precisa olhar os
+// dois casos.
+async function getEvent(userId, googleEventId) {
+  const accessToken = await ensureFreshAccessToken(userId);
+
+  const response = await fetch(`${EVENTS_URL}/${googleEventId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (response.status === 404 || response.status === 410) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new ServiceError({
+      message: "Não foi possível consultar o evento no Google Calendar.",
+      action: "Tente sincronizar novamente.",
+      cause: await response.text(),
+    });
+  }
+
+  return response.json();
+}
+
 async function deleteEvent(userId, googleEventId) {
   const accessToken = await ensureFreshAccessToken(userId);
 
@@ -328,6 +354,7 @@ const googleCalendar = {
   ensureFreshAccessToken,
   createEvent,
   updateEvent,
+  getEvent,
   deleteEvent,
   listEvents,
   fromGoogleEvent,

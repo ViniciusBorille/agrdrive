@@ -223,6 +223,81 @@ describe("models/google-calendar.js", () => {
     });
   });
 
+  describe(".getEvent()", () => {
+    function validCredentials() {
+      database.query.mockResolvedValueOnce({
+        rows: [
+          storedCredentials({
+            accessToken: "valid-token",
+            refreshToken: "refresh-token",
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          }),
+        ],
+      });
+    }
+
+    test("returns the event when it still exists", async () => {
+      validCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "evento-1", status: "confirmed" }),
+      });
+
+      const googleEvent = await googleCalendar.getEvent("user-1", "evento-1");
+
+      expect(googleEvent).toMatchObject({ id: "evento-1" });
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events/evento-1",
+        expect.objectContaining({
+          headers: { Authorization: "Bearer valid-token" },
+        }),
+      );
+    });
+
+    test("returns null when the event was deleted", async () => {
+      validCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => "Not Found",
+      });
+
+      await expect(
+        googleCalendar.getEvent("user-1", "evento-apagado"),
+      ).resolves.toBeNull();
+    });
+
+    test("returns null when the event was already purged", async () => {
+      validCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 410,
+        text: async () => "Gone",
+      });
+
+      await expect(
+        googleCalendar.getEvent("user-1", "evento-expurgado"),
+      ).resolves.toBeNull();
+    });
+
+    // Distinguir "apagado" de "não deu para saber" é o que impede a
+    // sincronização de apagar visitas locais por causa de uma falha
+    // temporária do Google.
+    test("throws ServiceError when Google fails for another reason", async () => {
+      validCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "Internal Server Error",
+      });
+
+      await expect(
+        googleCalendar.getEvent("user-1", "evento-1"),
+      ).rejects.toMatchObject({ name: "ServiceError" });
+    });
+  });
+
   describe(".fromGoogleEvent()", () => {
     test("converts a timed event into a visit", () => {
       const visit = googleCalendar.fromGoogleEvent({
@@ -312,6 +387,403 @@ describe("models/google-calendar.js", () => {
       });
 
       expect(roundTripped).toMatchObject(originalVisit);
+    });
+
+    // A API do Google sempre manda start/end, mas um evento malformado
+    // não pode derrubar a sincronização inteira com um TypeError.
+    test("não quebra com um evento sem start nem end", () => {
+      expect(() =>
+        googleCalendar.fromGoogleEvent({ id: "evento-7", summary: "Sem data" }),
+      ).not.toThrow();
+    });
+  });
+
+  // Daqui pra baixo, tudo depende de credenciais válidas no banco. O
+  // helper injeta a linha cifrada que `ensureFreshAccessToken` espera.
+  function mockValidCredentials() {
+    database.query.mockResolvedValueOnce({
+      rows: [
+        storedCredentials({
+          accessToken: "valid-token",
+          refreshToken: "refresh-token",
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        }),
+      ],
+    });
+  }
+
+  const visitInputValues = {
+    title: "Visita técnica",
+    client: "Fazenda Boa Vista",
+    event_date: "2026-09-01",
+    start_time: "08:00",
+    end_time: "09:30",
+  };
+
+  describe(".exchangeCodeForTokens()", () => {
+    test("envia o code e os segredos no formato de formulário", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: "novo-token" }),
+      });
+
+      const tokens = await googleCalendar.exchangeCodeForTokens("codigo-oauth");
+
+      expect(tokens).toEqual({ access_token: "novo-token" });
+
+      const [url, options] = global.fetch.mock.calls[0];
+      expect(url).toBe("https://oauth2.googleapis.com/token");
+      expect(options.method).toBe("POST");
+
+      const body = new URLSearchParams(options.body);
+      expect(body.get("code")).toBe("codigo-oauth");
+      expect(body.get("grant_type")).toBe("authorization_code");
+      expect(body.get("client_secret")).toBe("test-client-secret");
+    });
+
+    test("lança ServiceError quando o Google recusa o code", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        text: async () => "invalid_grant",
+      });
+
+      await expect(
+        googleCalendar.exchangeCodeForTokens("codigo-expirado"),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          name: "ServiceError",
+          message: "Não foi possível concluir a conexão com o Google Calendar.",
+        }),
+      );
+    });
+  });
+
+  describe(".refreshAccessToken()", () => {
+    test("troca o refresh token por um access token novo", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          access_token: "token-renovado",
+          expires_in: 3600,
+        }),
+      });
+
+      const tokens = await googleCalendar.refreshAccessToken("refresh-token");
+
+      expect(tokens.access_token).toBe("token-renovado");
+
+      const body = new URLSearchParams(global.fetch.mock.calls[0][1].body);
+      expect(body.get("refresh_token")).toBe("refresh-token");
+      expect(body.get("grant_type")).toBe("refresh_token");
+    });
+
+    test("pede reconexão quando o refresh token foi revogado", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        text: async () => "invalid_grant",
+      });
+
+      await expect(
+        googleCalendar.refreshAccessToken("refresh-revogado"),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          name: "ServiceError",
+          action: "Reconecte sua conta do Google Calendar.",
+        }),
+      );
+    });
+  });
+
+  describe(".toGoogleEvent() (via createEvent)", () => {
+    test("monta o evento com fuso fixo e descrição do cliente", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: "evento-1" }),
+      });
+
+      await googleCalendar.createEvent("user-1", visitInputValues);
+
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body).toEqual({
+        summary: "Visita técnica",
+        description: "Cliente/Fazenda: Fazenda Boa Vista",
+        start: {
+          dateTime: "2026-09-01T08:00:00",
+          timeZone: "America/Sao_Paulo",
+        },
+        end: {
+          dateTime: "2026-09-01T09:30:00",
+          timeZone: "America/Sao_Paulo",
+        },
+      });
+    });
+
+    // A coluna `time` do Postgres devolve "HH:MM:SS"; sem o corte, o
+    // dateTime sairia com segundos duplicados e o Google recusaria.
+    test("aceita horários que voltam do banco como HH:MM:SS", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: "evento-1" }),
+      });
+
+      await googleCalendar.createEvent("user-1", {
+        ...visitInputValues,
+        start_time: "08:00:00",
+        end_time: "09:30:00",
+      });
+
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body.start.dateTime).toBe("2026-09-01T08:00:00");
+      expect(body.end.dateTime).toBe("2026-09-01T09:30:00");
+    });
+
+    test("omite a descrição quando a visita não tem cliente", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: "evento-1" }),
+      });
+
+      await googleCalendar.createEvent("user-1", {
+        ...visitInputValues,
+        client: null,
+      });
+
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body).not.toHaveProperty("description");
+    });
+  });
+
+  describe(".createEvent()", () => {
+    test("devolve o evento criado pelo Google", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: "evento-novo" }),
+      });
+
+      const googleEvent = await googleCalendar.createEvent(
+        "user-1",
+        visitInputValues,
+      );
+
+      expect(googleEvent).toEqual({ id: "evento-novo" });
+      expect(global.fetch.mock.calls[0][1].headers.Authorization).toBe(
+        "Bearer valid-token",
+      );
+    });
+
+    test("lança ServiceError quando o Google recusa a criação", async () => {
+      mockValidCredentials();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, text: async () => "quota exceeded" });
+
+      await expect(
+        googleCalendar.createEvent("user-1", visitInputValues),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          message: "Não foi possível criar o evento no Google Calendar.",
+        }),
+      );
+    });
+  });
+
+  describe(".updateEvent()", () => {
+    test("faz PATCH no evento informado", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: "evento-1" }),
+      });
+
+      await googleCalendar.updateEvent("user-1", "evento-1", visitInputValues);
+
+      const [url, options] = global.fetch.mock.calls[0];
+      expect(url).toBe(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events/evento-1",
+      );
+      expect(options.method).toBe("PATCH");
+    });
+
+    test("lança ServiceError quando o Google recusa a atualização", async () => {
+      mockValidCredentials();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, text: async () => "not found" });
+
+      await expect(
+        googleCalendar.updateEvent("user-1", "evento-1", visitInputValues),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          message: "Não foi possível atualizar o evento no Google Calendar.",
+        }),
+      );
+    });
+  });
+
+  describe(".listEvents()", () => {
+    test("expande recorrências e ordena por início", async () => {
+      mockValidCredentials();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+
+      await googleCalendar.listEvents("user-1");
+
+      const url = new URL(global.fetch.mock.calls[0][0]);
+      // `singleEvents` transforma série recorrente em ocorrências, que é
+      // o que vira visita individual no AgrDrive.
+      expect(url.searchParams.get("singleEvents")).toBe("true");
+      expect(url.searchParams.get("orderBy")).toBe("startTime");
+      expect(url.searchParams.has("timeMin")).toBe(false);
+      expect(url.searchParams.has("timeMax")).toBe(false);
+    });
+
+    test("repassa a janela quando timeMin e timeMax são informados", async () => {
+      mockValidCredentials();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+
+      await googleCalendar.listEvents("user-1", {
+        timeMin: "2026-08-01T00:00:00.000Z",
+        timeMax: "2026-09-01T00:00:00.000Z",
+      });
+
+      const url = new URL(global.fetch.mock.calls[0][0]);
+      expect(url.searchParams.get("timeMin")).toBe("2026-08-01T00:00:00.000Z");
+      expect(url.searchParams.get("timeMax")).toBe("2026-09-01T00:00:00.000Z");
+    });
+
+    test("devolve os eventos retornados pelo Google", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ items: [{ id: "evento-1" }, { id: "evento-2" }] }),
+      });
+
+      const events = await googleCalendar.listEvents("user-1");
+
+      expect(events).toHaveLength(2);
+    });
+
+    // Uma agenda vazia devolve a resposta sem a chave `items`. Sem o
+    // fallback, quem consome receberia `undefined` e quebraria no laço.
+    test("devolve lista vazia quando a resposta não traz items", async () => {
+      mockValidCredentials();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({}) });
+
+      await expect(googleCalendar.listEvents("user-1")).resolves.toEqual([]);
+    });
+
+    test("lança ServiceError quando o Google recusa a listagem", async () => {
+      mockValidCredentials();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, text: async () => "rate limited" });
+
+      await expect(googleCalendar.listEvents("user-1")).rejects.toThrow(
+        expect.objectContaining({
+          message: "Não foi possível buscar os eventos do Google Calendar.",
+        }),
+      );
+    });
+  });
+
+  describe(".deleteEvent()", () => {
+    test("faz DELETE no evento informado", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 204 });
+
+      await googleCalendar.deleteEvent("user-1", "evento-1");
+
+      const [url, options] = global.fetch.mock.calls[0];
+      expect(url).toBe(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events/evento-1",
+      );
+      expect(options.method).toBe("DELETE");
+    });
+
+    // Apagar algo que já não existe é o resultado desejado, não um erro.
+    test.each([404, 410])("trata %i como sucesso", async (status) => {
+      mockValidCredentials();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, status, text: async () => "gone" });
+
+      await expect(
+        googleCalendar.deleteEvent("user-1", "evento-1"),
+      ).resolves.toBeUndefined();
+    });
+
+    test("lança ServiceError nos demais erros", async () => {
+      mockValidCredentials();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "internal",
+      });
+
+      await expect(
+        googleCalendar.deleteEvent("user-1", "evento-1"),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          message: "Não foi possível remover o evento no Google Calendar.",
+        }),
+      );
+    });
+  });
+
+  describe(".revokeAccess()", () => {
+    test("revoga no Google e apaga as credenciais locais", async () => {
+      mockValidCredentials();
+      database.query.mockResolvedValueOnce({ rows: [] });
+      global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+      await googleCalendar.revokeAccess("user-1");
+
+      const body = new URLSearchParams(global.fetch.mock.calls[0][1].body);
+      expect(body.get("token")).toBe("valid-token");
+
+      const deleteQuery = database.query.mock.calls.at(-1)[0];
+      expect(deleteQuery.text).toContain(
+        "DELETE FROM google_calendar_credentials",
+      );
+      expect(deleteQuery.values).toEqual(["user-1"]);
+    });
+
+    // Desconectar não pode depender do Google estar no ar: o usuário
+    // ficaria preso a uma conta que não consegue remover.
+    test("apaga as credenciais mesmo se a revogação falhar", async () => {
+      mockValidCredentials();
+      database.query.mockResolvedValueOnce({ rows: [] });
+      global.fetch = jest.fn().mockRejectedValue(new Error("rede fora"));
+
+      await expect(
+        googleCalendar.revokeAccess("user-1"),
+      ).resolves.toBeUndefined();
+
+      expect(database.query.mock.calls.at(-1)[0].text).toContain(
+        "DELETE FROM google_calendar_credentials",
+      );
+    });
+
+    test("apaga as credenciais sem chamar o Google quando não há conexão", async () => {
+      database.query.mockResolvedValueOnce({ rows: [] });
+      database.query.mockResolvedValueOnce({ rows: [] });
+      global.fetch = jest.fn();
+
+      await googleCalendar.revokeAccess("user-1");
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(database.query.mock.calls.at(-1)[0].text).toContain(
+        "DELETE FROM google_calendar_credentials",
+      );
     });
   });
 });
