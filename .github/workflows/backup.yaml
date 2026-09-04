@@ -1,0 +1,116 @@
+name: Backup do banco
+
+# Camada 2 do backup: uma cópia FORA do Neon. O branch (camada 1, via
+# `npm run backup:branch`) protege de erro nosso; isto protege de perder
+# o acesso à conta, projeto apagado ou problema do provedor.
+#
+# O dump NÃO é publicado como artefato: este repositório é público, e
+# artefatos de repositório público são baixáveis por qualquer pessoa.
+# Ele vai cifrado direto para um bucket privado.
+#
+# Secrets necessários (Settings > Secrets and variables > Actions):
+#
+#   BACKUP_DATABASE_URL         connection string do Neon — a DIRETA, não
+#                               a pooled. O host com `-pooler` passa por
+#                               PgBouncer e o pg_dump não funciona nele.
+#   BACKUP_PASSPHRASE           senha de cifragem. Guarde FORA do GitHub:
+#                               perdida, os backups viram lixo.
+#   BACKUP_S3_ENDPOINT          R2: https://<accountid>.r2.cloudflarestorage.com
+#                               B2: https://s3.<regiao>.backblazeb2.com
+#   BACKUP_S3_BUCKET            nome do bucket (privado)
+#   BACKUP_S3_ACCESS_KEY_ID     credencial com escrita APENAS neste bucket
+#   BACKUP_S3_SECRET_ACCESS_KEY
+#
+# Opcional, como variable (não secret): BACKUP_S3_REGION — "auto" no R2,
+# algo como "us-west-004" no B2.
+#
+# Retenção: configure uma lifecycle rule no bucket em vez de apagar por
+# aqui. Regra do provedor não depende deste workflow rodar, e um laço de
+# delete no CI é o tipo de coisa que apaga o que não devia.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+# Este workflow não toca no repositório; sem isso o GITHUB_TOKEN viria
+# com permissões de escrita que ele não tem motivo para ter.
+permissions: {}
+
+jobs:
+  dump:
+    name: pg_dump cifrado para o object storage
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.BACKUP_S3_REGION || 'auto' }}
+      # A partir da v2.23 a AWS CLI manda checksums de integridade que
+      # nem todo storage compatível aceita, e a falha resultante é
+      # críptica. "when_required" mantém a compatibilidade.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+      BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+
+    steps:
+      # O pg_dump precisa ser >= à major do servidor: ele dumpa versões
+      # mais antigas sem problema, mas se recusa a rodar contra uma mais
+      # nova. Fixar a 17 cobre projetos Neon em 15, 16 ou 17. A imagem
+      # oficial também evita depender do que o runner tiver instalado.
+      - name: Gerar o dump
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}" || { echo "::error::secret BACKUP_DATABASE_URL não configurado"; exit 1; }
+          echo "NOME=agrdrive-$(date -u +%Y-%m-%dT%H-%M-%SZ)" >> "$GITHUB_ENV"
+          docker run --rm -e DATABASE_URL postgres:17-alpine \
+            pg_dump "$DATABASE_URL" \
+              --format=custom \
+              --no-owner \
+              --no-privileges \
+            > dump.pgdump
+          test -s dump.pgdump || { echo "::error::o dump saiu vazio"; exit 1; }
+          ls -lh dump.pgdump
+
+      # O dump é o ativo mais sensível do projeto: e-mail de todos os
+      # usuários, hashes de senha e os tokens do Google. Cifrar antes de
+      # sair daqui vale mesmo com bucket privado — a credencial do bucket
+      # deixa de ser o único obstáculo entre um vazamento e os dados.
+      - name: Cifrar
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test -n "${PASSPHRASE:-}" || { echo "::error::secret BACKUP_PASSPHRASE não configurado"; exit 1; }
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --passphrase "$PASSPHRASE" \
+              --output "$NOME.pgdump.gpg" dump.pgdump
+          rm -f dump.pgdump
+          ls -lh "$NOME.pgdump.gpg"
+
+      - name: Enviar para o object storage
+        run: |
+          set -euo pipefail
+          test -n "${ENDPOINT:-}" || { echo "::error::secret BACKUP_S3_ENDPOINT não configurado"; exit 1; }
+          test -n "${BUCKET:-}" || { echo "::error::secret BACKUP_S3_BUCKET não configurado"; exit 1; }
+          test -n "${AWS_ACCESS_KEY_ID:-}" || { echo "::error::credenciais do bucket não configuradas"; exit 1; }
+          aws s3 cp "$NOME.pgdump.gpg" "s3://$BUCKET/$NOME.pgdump.gpg" \
+            --endpoint-url "$ENDPOINT" \
+            --no-progress
+
+      # `aws s3 cp` já falha em erro, mas um upload truncado pode passar.
+      # Reler o objeto confirma que ele existe e tem o tamanho esperado.
+      - name: Confirmar que o backup chegou
+        run: |
+          set -euo pipefail
+          esperado=$(stat -c %s "$NOME.pgdump.gpg")
+          remoto=$(aws s3api head-object \
+            --bucket "$BUCKET" \
+            --key "$NOME.pgdump.gpg" \
+            --endpoint-url "$ENDPOINT" \
+            --query ContentLength --output text)
+          echo "local: $esperado bytes | remoto: $remoto bytes"
+          test "$esperado" = "$remoto" || { echo "::error::tamanho divergente no bucket"; exit 1; }
+          echo "🟢 backup $NOME.pgdump.gpg confirmado no bucket"

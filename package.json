@@ -13,6 +13,7 @@
     "services:down": "docker compose -f infra/compose.yaml down",
     "services:stop": "docker compose -f infra/compose.yaml stop",
     "services:wait:database": "node infra/scripts/wait-for-postgres.js",
+    "backup:branch": "node infra/scripts/neon-backup-branch.js",
     "migrations:create": "node-pg-migrate -m infra/migrations create",
     "migrations:up": "node-pg-migrate -m infra/migrations --envPath .env.development up",
     "migrations:up:dry": "node-pg-migrate -m infra/migrations --envPath .env.development --dry-run up",
