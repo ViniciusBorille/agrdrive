@@ -43,7 +43,12 @@ function addDays(dateStr, n) {
 }
 function startOfWeek(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
-  return dstr(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
+  // A subtração precisa passar pelo `setDate`, e não ir direto para o
+  // `dstr`: quando o domingo da semana cai no mês anterior, o cálculo
+  // resulta em dia zero ou negativo, e `dstr` montaria uma string como
+  // "2026-09--1", que vira Invalid Date. O `setDate` normaliza o mês.
+  d.setDate(d.getDate() - d.getDay());
+  return dstr(d.getFullYear(), d.getMonth(), d.getDate());
 }
 function todayStr() {
   const d = new Date();
