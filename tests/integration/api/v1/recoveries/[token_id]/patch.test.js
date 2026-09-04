@@ -44,7 +44,7 @@ describe("PATCH /api/v1/recoveries/[token_id]", () => {
       jest.useRealTimers();
 
       const response = await fetch(
-        `http://localhost:3000/api/v1/recoveries/${expiredRecoveryToken.id}`,
+        `http://localhost:3000/api/v1/recoveries/${expiredRecoveryToken.token}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -70,7 +70,7 @@ describe("PATCH /api/v1/recoveries/[token_id]", () => {
       const recoveryToken = await recovery.create(createdUser.id);
 
       const response = await fetch(
-        `http://localhost:3000/api/v1/recoveries/${recoveryToken.id}`,
+        `http://localhost:3000/api/v1/recoveries/${recoveryToken.token}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -95,7 +95,7 @@ describe("PATCH /api/v1/recoveries/[token_id]", () => {
       const recoveryToken = await recovery.create(createdUser.id);
 
       const response1 = await fetch(
-        `http://localhost:3000/api/v1/recoveries/${recoveryToken.id}`,
+        `http://localhost:3000/api/v1/recoveries/${recoveryToken.token}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -106,7 +106,7 @@ describe("PATCH /api/v1/recoveries/[token_id]", () => {
       expect(response1.status).toBe(200);
 
       const response2 = await fetch(
-        `http://localhost:3000/api/v1/recoveries/${recoveryToken.id}`,
+        `http://localhost:3000/api/v1/recoveries/${recoveryToken.token}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -134,7 +134,7 @@ describe("PATCH /api/v1/recoveries/[token_id]", () => {
       const recoveryToken = await recovery.create(createdUser.id);
 
       const response = await fetch(
-        `http://localhost:3000/api/v1/recoveries/${recoveryToken.id}`,
+        `http://localhost:3000/api/v1/recoveries/${recoveryToken.token}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

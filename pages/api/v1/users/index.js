@@ -32,17 +32,10 @@ const createUserSchema = z
   .strict("Campos não permitidos foram enviados na requisição.");
 
 // Cadastro restrito a usuários com a feature "create:user".
-// Anti-abuso (A06/A07): limita criação de contas e o disparo de
-// e-mails de ativação — 10 cadastros por IP por hora.
-const signupRateLimit = controller.rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-});
-
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
   .get(controller.requireAuthentication, getHandler)
-  .post(signupRateLimit, controller.canRequest("create:user"), postHandler)
+  .post(controller.canRequest("create:user"), postHandler)
   .handler(controller.errorHandlers);
 
 async function getHandler(request, response) {

@@ -10,6 +10,11 @@ import prettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
   {
+    // Relatório gerado pelo `jest --coverage`: é artefato de build (já
+    // ignorado pelo Git) e o HTML/JS dele não segue as regras do projeto.
+    ignores: ["coverage/"],
+  },
+  {
     files: ["**/*.{js,mjs,cjs,jsx}"],
     plugins: { js },
     extends: ["js/recommended"],

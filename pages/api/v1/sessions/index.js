@@ -19,18 +19,9 @@ const createSessionSchema = z
   })
   .strict("Campos não permitidos foram enviados na requisição.");
 
-// Proteção contra brute force / credential stuffing (A07):
-// no máximo 5 tentativas de login por IP+email a cada 15 minutos.
-const loginRateLimit = controller.rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  keyGenerator: (request, ip) =>
-    `${ip}:${String(request.body?.email ?? "").toLowerCase()}`,
-});
-
 export default createRouter()
   .use(controller.injectAnonymousOrUser)
-  .post(loginRateLimit, controller.canRequest("create:session"), postHandler)
+  .post(controller.canRequest("create:session"), postHandler)
   .delete(deleteHandler)
   .handler(controller.errorHandlers);
 
@@ -81,10 +72,11 @@ async function deleteHandler(request, response) {
 
   controller.clearSessionCookie(response);
 
+  // O banco guarda só o hash do token; devolve o valor cru do cookie.
   const secureOutputValues = authorization.filterOutput(
     userTryingToDelete,
     "read:session",
-    expiredSession,
+    { ...expiredSession, token: sessionToken },
   );
 
   return response.status(200).json(secureOutputValues);

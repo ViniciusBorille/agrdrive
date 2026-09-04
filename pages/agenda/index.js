@@ -694,6 +694,8 @@ export default function Agenda() {
     const parts = [];
     if (data.synced) parts.push(`${data.synced} enviada(s) ao Google`);
     if (data.imported) parts.push(`${data.imported} importada(s) do Google`);
+    if (data.removed)
+      parts.push(`${data.removed} removida(s) (apagada(s) no Google)`);
 
     if (parts.length > 0) {
       invalidateVisits();

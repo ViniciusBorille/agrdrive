@@ -1,10 +1,13 @@
 import crypto from "node:crypto";
 import database from "@/infra/database.js";
+import cryptography from "@/infra/crypto.js";
 import { UnauthorizedError } from "@/infra/errors";
 
 const EXPIRATION_IN_MILISECONDS = 60 * 60 * 24 * 30 * 1000; // 30 Days
 const ABSOLUTE_EXPIRATION_IN_MILISECONDS = 60 * 60 * 24 * 90 * 1000; // 90 Days
 
+// O banco guarda apenas o SHA-256 do token: quem obtiver um dump não
+// consegue sequestrar sessões. O valor cru existe só no cookie do usuário.
 async function findOneValidByToken(sessionToken) {
   const sessionFound = await runSelectQuery(sessionToken);
 
@@ -23,7 +26,7 @@ async function findOneValidByToken(sessionToken) {
         LIMIT
           1
       ;`,
-      values: [sessionToken],
+      values: [cryptography.sha256(sessionToken)],
     });
 
     if (results.rowCount === 0) {
@@ -41,7 +44,9 @@ async function create(userId) {
   const token = crypto.randomBytes(48).toString("hex");
 
   const newSession = await runInsertQuery(token, userId);
-  return newSession;
+
+  // Devolve o token cru (para o cookie); no banco fica apenas o hash.
+  return { ...newSession, token };
 
   async function runInsertQuery(token, userId) {
     const results = await database.query({
@@ -53,7 +58,7 @@ async function create(userId) {
             RETURNING
                 *
             ;`,
-      values: [token, userId, EXPIRATION_IN_MILISECONDS],
+      values: [cryptography.sha256(token), userId, EXPIRATION_IN_MILISECONDS],
     });
 
     return results.rows[0];
@@ -130,7 +135,7 @@ async function expireAllByUserId(userId, { exceptToken } = {}) {
       RETURNING
         *
     ;`,
-    values: [userId, exceptToken ?? null],
+    values: [userId, exceptToken ? cryptography.sha256(exceptToken) : null],
   });
 
   return results.rows;

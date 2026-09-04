@@ -1,16 +1,20 @@
+import { randomUUID } from "node:crypto";
 import email from "@/infra/email.js";
 import database from "@/infra/database.js";
+import cryptography from "@/infra/crypto.js";
 import webserver from "@/infra/webserver.js";
 import { NotFoundError } from "@/infra/errors.js";
 
 const EXPIRATION_IN_MILISECONDS = 60 * 15 * 1000; // 15 minutes
 
-async function findOneByValidId(tokenId) {
-  const recoveryTokenObject = await runSelectQuery(tokenId);
+// O link do e-mail carrega o token cru; o banco guarda apenas o SHA-256,
+// então um dump não permite tomar contas via reset de senha.
+async function findOneValidByToken(tokenValue) {
+  const recoveryTokenObject = await runSelectQuery(tokenValue);
 
   return recoveryTokenObject;
 
-  async function runSelectQuery(tokenId) {
+  async function runSelectQuery(tokenValue) {
     const results = await database.query({
       text: `
                 SELECT
@@ -18,13 +22,13 @@ async function findOneByValidId(tokenId) {
                 FROM
                     password_recovery_tokens
                 WHERE
-                    id = $1
+                    token_hash = $1
                     AND expires_at > NOW()
                     AND used_at IS NULL
                 LIMIT
                     1
             ;`,
-      values: [tokenId],
+      values: [cryptography.sha256(tokenValue)],
     });
 
     if (results.rowCount === 0) {
@@ -41,21 +45,24 @@ async function findOneByValidId(tokenId) {
 
 async function create(userId) {
   const expireAt = new Date(Date.now() + EXPIRATION_IN_MILISECONDS);
+  const token = randomUUID();
 
-  const newToken = await runInsertQuery(userId, expireAt);
-  return newToken;
+  const newToken = await runInsertQuery(userId, expireAt, token);
 
-  async function runInsertQuery(userId, expireAt) {
+  // Devolve o token cru (para o link do e-mail); no banco fica só o hash.
+  return { ...newToken, token };
+
+  async function runInsertQuery(userId, expireAt, token) {
     const results = await database.query({
       text: `
                 INSERT INTO
-                    password_recovery_tokens (user_id, expires_at)
+                    password_recovery_tokens (user_id, expires_at, token_hash)
                 VALUES
-                    ($1, $2)
+                    ($1, $2, $3)
                 RETURNING
                     *
             ;`,
-      values: [userId, expireAt],
+      values: [userId, expireAt, cryptography.sha256(token)],
     });
 
     return results.rows[0];
@@ -69,7 +76,7 @@ async function sendEmailToUser(user, recoveryToken) {
     subject: "Recuperação de senha no AgrDrive",
     text: `${user.username}, clique no link abaixo para definir uma nova senha no AgrDrive:
 
-${webserver.origin}/recuperar-senha/${recoveryToken.id}
+${webserver.origin}/recuperar-senha/${recoveryToken.token}
 
 Se você não solicitou a recuperação de senha, ignore este e-mail.
 
@@ -100,7 +107,7 @@ async function markTokenAsUsed(recoveryTokenId) {
 const recovery = {
   sendEmailToUser,
   create,
-  findOneByValidId,
+  findOneValidByToken,
   markTokenAsUsed,
   EXPIRATION_IN_MILISECONDS,
 };

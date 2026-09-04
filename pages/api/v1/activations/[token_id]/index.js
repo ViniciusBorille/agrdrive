@@ -11,18 +11,19 @@ export default createRouter()
 
 async function patchHandler(request, response) {
   const userTryingToPatch = request.context.user;
-  const activationtokenId = validator.validate(
+  const activationTokenValue = validator.validate(
     validator.uuidSchema,
     request.query.token_id,
   );
 
   const validActivationToken =
-    await activation.findOneByValidId(activationtokenId);
+    await activation.findOneValidByToken(activationTokenValue);
 
   await activation.activateUserByUserId(validActivationToken.user_id);
 
-  const usedActivationToken =
-    await activation.markTokenAsUsed(activationtokenId);
+  const usedActivationToken = await activation.markTokenAsUsed(
+    validActivationToken.id,
+  );
 
   const secureOutputValues = authorization.filterOutput(
     userTryingToPatch,

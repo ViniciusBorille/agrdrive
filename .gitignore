@@ -4,3 +4,4 @@ coverage
 .claude
 .env*
 !.env.development.example
+.neon

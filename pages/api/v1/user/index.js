@@ -14,8 +14,10 @@ async function getHandler(request, response) {
   const sessionToken = request.cookies.session_id;
 
   const sessionObject = await session.findOneValidByToken(sessionToken);
-  const renewedSessionObject = await session.renew(sessionObject.id);
-  controller.setSessionCookie(renewedSessionObject.token, response);
+  await session.renew(sessionObject.id);
+  // A renovação estende o prazo sem trocar o token; o cookie é reemitido
+  // com o valor cru original (no banco existe apenas o hash).
+  controller.setSessionCookie(sessionToken, response);
 
   const userFound = await user.findOneById(sessionObject.user_id);
 

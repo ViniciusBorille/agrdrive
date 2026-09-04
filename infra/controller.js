@@ -2,7 +2,6 @@ import * as cookie from "cookie";
 import session from "@/models/session.js";
 import user from "@/models/user";
 import authorization from "@/models/authorization.js";
-import rateLimiter from "@/infra/rate-limiter.js";
 import logger from "@/infra/logger.js";
 
 import {
@@ -12,7 +11,6 @@ import {
   NotFoundError,
   UnauthorizedError,
   ForbiddenError,
-  TooManyRequestsError,
 } from "@/infra/errors";
 
 function onNoMatchHandler(request, response) {
@@ -34,10 +32,6 @@ function onErrorHandler(error, request, response) {
       ...logger.getRequestMetadata(request),
       user_id: request.context?.user?.id ?? null,
     });
-    return response.status(error.statusCode).json(error);
-  }
-  if (error instanceof TooManyRequestsError) {
-    logger.security("rate_limited", logger.getRequestMetadata(request));
     return response.status(error.statusCode).json(error);
   }
   if (error instanceof ValidationError || error instanceof NotFoundError) {
@@ -126,27 +120,6 @@ function canRequest(feature) {
   };
 }
 
-function rateLimit({ windowMs, max, keyGenerator }) {
-  const limiter = rateLimiter.createRateLimiter({ windowMs, max });
-
-  return function rateLimitMiddleware(request, response, next) {
-    if (["test", "development"].includes(process.env.NODE_ENV)) {
-      return next();
-    }
-
-    const { ip } = logger.getRequestMetadata(request);
-    const key = keyGenerator ? keyGenerator(request, ip) : ip;
-
-    const { allowed } = limiter.consume(String(key));
-
-    if (!allowed) {
-      throw new TooManyRequestsError();
-    }
-
-    return next();
-  };
-}
-
 function requireAuthentication(request, response, next) {
   if (!request.context?.user?.id) {
     throw new UnauthorizedError({
@@ -166,7 +139,6 @@ const controller = {
   clearSessionCookie,
   injectAnonymousOrUser,
   canRequest,
-  rateLimit,
   requireAuthentication,
 };
 

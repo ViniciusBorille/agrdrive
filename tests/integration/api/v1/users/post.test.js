@@ -239,7 +239,7 @@ describe("POST /api/v1/users", () => {
       const createdUser = await user.findOneByUsername("usuarioComModulos");
       const activationResponse = await fetch(
         `http://localhost:3000/api/v1/activations/${
-          (await activation.create(createdUser.id)).id
+          (await activation.create(createdUser.id)).token
         }`,
         { method: "PATCH" },
       );

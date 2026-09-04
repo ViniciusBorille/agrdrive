@@ -62,7 +62,7 @@ describe("Use case: Registration Flow (all successful", () => {
       `${webserver.origin}/ativar/${activationTokenId}`,
     );
     const activationTokenObject =
-      await activation.findOneByValidId(activationTokenId);
+      await activation.findOneValidByToken(activationTokenId);
     expect(activationTokenObject.user_id).toBe(createUserResponseBody.id);
     expect(activationTokenObject.used_at).toBe(null);
   });

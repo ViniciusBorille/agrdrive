@@ -284,6 +284,46 @@ function fromGoogleEvent(googleEvent) {
   };
 }
 
+// Devolve `null` quando o evento não existe mais no Google (apagado ou
+// já expurgado da lixeira). Eventos apagados que ainda estão na lixeira
+// respondem 200 com `status: "cancelled"` — quem chama precisa olhar os
+// dois casos.
+async function getEvent(userId, googleEventId) {
+  const accessToken = await ensureFreshAccessToken(userId);
+
+  const response = await fetch(`${EVENTS_URL}/${googleEventId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (response.status === 404 || response.status === 410) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new ServiceError({
+      message: "Não foi possível consultar o evento no Google Calendar.",
+      action: "Tente sincronizar novamente.",
+      cause: await response.text(),
+    });
+  }
+
+  return response.json();
+}
+
+// Só o `cancelled` explícito prova que o evento existiu neste calendário
+// e foi apagado. Um 404 diz apenas "não existe aqui", o que também
+// acontece quando o evento pertence ao calendário de outra conta Google:
+// como `saveCredentials` é um upsert por usuário, basta reconectar com
+// outra conta para que todos os ids antigos passem a responder 404. Se
+// isso contasse como exclusão, uma troca de conta apagaria a agenda
+// inteira. O preço de ser conservador é não remover eventos que o Google
+// já expurgou da lixeira — a visita fica, que é a falha segura.
+async function wasEventDeleted(userId, googleEventId) {
+  const googleEvent = await getEvent(userId, googleEventId);
+
+  return googleEvent?.status === "cancelled";
+}
+
 async function deleteEvent(userId, googleEventId) {
   const accessToken = await ensureFreshAccessToken(userId);
 
@@ -328,6 +368,8 @@ const googleCalendar = {
   ensureFreshAccessToken,
   createEvent,
   updateEvent,
+  getEvent,
+  wasEventDeleted,
   deleteEvent,
   listEvents,
   fromGoogleEvent,

@@ -229,7 +229,11 @@ async function remove(id) {
   }
 }
 
-async function runInsertAssigneesQuery(taskId, userIds, client = database) {
+// `client` é obrigatório: estas duas escritas em `task_assignees` só
+// fazem sentido dentro da transação de `create`/`update`. Um default
+// para `database` faria a escrita escapar da transação e sobreviver a
+// um rollback, deixando responsáveis órfãos.
+async function runInsertAssigneesQuery(taskId, userIds, client) {
   const placeholders = userIds.map((_, i) => `($1, $${i + 2})`).join(", ");
   await client.query({
     text: `INSERT INTO task_assignees (task_id, user_id) VALUES ${placeholders} ON CONFLICT DO NOTHING`,
@@ -237,7 +241,7 @@ async function runInsertAssigneesQuery(taskId, userIds, client = database) {
   });
 }
 
-async function runDeleteAssigneesQuery(taskId, client = database) {
+async function runDeleteAssigneesQuery(taskId, client) {
   await client.query({
     text: `DELETE FROM task_assignees WHERE task_id = $1`,
     values: [taskId],

@@ -25,6 +25,8 @@ async function getUser(providedEmail, providedPassword) {
       storedUser = await user.findOneByEmail(providedEmail);
     } catch (error) {
       if (error instanceof NotFoundError) {
+        await password.compareWithDummyHash(providedPassword);
+
         throw new UnauthorizedError({
           message: "Email não confere.",
           action: "Verifique se este dado esta correto.",

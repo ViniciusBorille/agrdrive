@@ -20,13 +20,14 @@ export default createRouter()
 
 async function patchHandler(request, response) {
   const userTryingToPatch = request.context.user;
-  const recoveryTokenId = validator.validate(
+  const recoveryTokenValue = validator.validate(
     validator.uuidSchema,
     request.query.token_id,
   );
   const { password } = validator.validate(resetPasswordSchema, request.body);
 
-  const validRecoveryToken = await recovery.findOneByValidId(recoveryTokenId);
+  const validRecoveryToken =
+    await recovery.findOneValidByToken(recoveryTokenValue);
 
   const userToUpdate = await user.findOneById(validRecoveryToken.user_id);
   await user.update(userToUpdate.username, { password });
@@ -34,7 +35,9 @@ async function patchHandler(request, response) {
   // Encerra todas as sessões ativas do usuário após a troca de senha.
   await session.expireAllByUserId(userToUpdate.id);
 
-  const usedRecoveryToken = await recovery.markTokenAsUsed(recoveryTokenId);
+  const usedRecoveryToken = await recovery.markTokenAsUsed(
+    validRecoveryToken.id,
+  );
 
   const secureOutputValues = authorization.filterOutput(
     userTryingToPatch,
