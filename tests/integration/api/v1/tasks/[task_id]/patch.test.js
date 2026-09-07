@@ -247,3 +247,172 @@ describe("PATCH /api/v1/tasks/:task_id", () => {
     });
   });
 });
+
+describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
+  async function authenticatedCreator() {
+    const creator = await orchestrator.createUser();
+    const activated = await orchestrator.activateUser(creator);
+    const sessionObject = await orchestrator.createSession(activated);
+    return { creator, sessionObject };
+  }
+
+  async function patchStatus(taskId, sessionObject, status) {
+    return await fetch(`http:localhost:3000/api/v1/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session_id=${sessionObject.token}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  test("Aceita PENDING -> IN_PROGRESS", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "PENDING",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "IN_PROGRESS",
+    );
+
+    expect(response.status).toBe(200);
+
+    const responseBody = await response.json();
+    expect(responseBody.status).toBe("IN_PROGRESS");
+  });
+
+  test("Aceita PENDING -> COMPLETED direto", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "PENDING",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "COMPLETED",
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  // O histórico do que aconteceu vale mais que desfazer um clique errado.
+  test("Recusa COMPLETED -> PENDING com 422", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "COMPLETED",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "PENDING",
+    );
+
+    expect(response.status).toBe(422);
+
+    const responseBody = await response.json();
+    expect(responseBody.name).toBe("UnprocessableEntityError");
+    expect(responseBody.status_code).toBe(422);
+  });
+
+  test("Recusa CANCELLED -> IN_PROGRESS com 422", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "CANCELLED",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "IN_PROGRESS",
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  // Transição recusada não pode gravar os outros campos que vieram junto.
+  test("Transição inválida não grava os demais campos do payload", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "COMPLETED",
+      title: "Título original",
+    });
+
+    const rejected = await fetch(
+      `http:localhost:3000/api/v1/tasks/${createdTask.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `session_id=${sessionObject.token}`,
+        },
+        body: JSON.stringify({ status: "PENDING", title: "Título novo" }),
+      },
+    );
+
+    expect(rejected.status).toBe(422);
+
+    const afterResponse = await fetch(
+      `http:localhost:3000/api/v1/tasks/${createdTask.id}`,
+      { headers: { Cookie: `session_id=${sessionObject.token}` } },
+    );
+    const afterBody = await afterResponse.json();
+
+    expect(afterBody.title).toBe("Título original");
+    expect(afterBody.status).toBe("COMPLETED");
+  });
+
+  // Reenviar o mesmo PATCH não pode virar erro.
+  test("Aceita reenviar o mesmo status, mesmo em estado terminal", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "COMPLETED",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "COMPLETED",
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  // Editar outros campos de uma tarefa encerrada continua permitido: a
+  // regra trava o status, não a tarefa.
+  test("Permite corrigir o título de uma tarefa encerrada", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "COMPLETED",
+    });
+
+    const response = await fetch(
+      `http:localhost:3000/api/v1/tasks/${createdTask.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `session_id=${sessionObject.token}`,
+        },
+        body: JSON.stringify({ title: "Título corrigido" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+
+    const responseBody = await response.json();
+    expect(responseBody.title).toBe("Título corrigido");
+  });
+});

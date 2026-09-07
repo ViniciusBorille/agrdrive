@@ -143,3 +143,44 @@ describe("GET /api/v1/tasks/:task_id", () => {
     });
   });
 });
+
+describe("GET /api/v1/tasks/:task_id (is_overdue)", () => {
+  const DAY_IN_MILISECONDS = 24 * 60 * 60 * 1000;
+
+  async function fetchTask(taskId, sessionObject) {
+    const response = await fetch(`http:localhost:3000/api/v1/tasks/${taskId}`, {
+      headers: { Cookie: `session_id=${sessionObject.token}` },
+    });
+    expect(response.status).toBe(200);
+    return await response.json();
+  }
+
+  test("Devolve is_overdue no detalhe, para os três casos de prazo", async () => {
+    const owner = await orchestrator.createUser();
+    const activatedOwner = await orchestrator.activateUser(owner);
+    const sessionObject = await orchestrator.createSession(activatedOwner);
+
+    const semPrazo = await orchestrator.createTask({
+      created_by: owner.id,
+      due_date: null,
+    });
+    const prazoFuturo = await orchestrator.createTask({
+      created_by: owner.id,
+      due_date: new Date(Date.now() + 3 * DAY_IN_MILISECONDS).toISOString(),
+    });
+    const prazoVencido = await orchestrator.createTask({
+      created_by: owner.id,
+      due_date: new Date(Date.now() - 3 * DAY_IN_MILISECONDS).toISOString(),
+    });
+
+    expect((await fetchTask(semPrazo.id, sessionObject)).is_overdue).toBe(
+      false,
+    );
+    expect((await fetchTask(prazoFuturo.id, sessionObject)).is_overdue).toBe(
+      false,
+    );
+    expect((await fetchTask(prazoVencido.id, sessionObject)).is_overdue).toBe(
+      true,
+    );
+  });
+});

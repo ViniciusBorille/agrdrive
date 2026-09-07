@@ -1,5 +1,45 @@
 import database from "@/infra/database.js";
-import { NotFoundError } from "@/infra/errors.js";
+import { NotFoundError, UnprocessableEntityError } from "@/infra/errors.js";
+import {
+  CLOSED_TASK_STATUSES,
+  TASK_STATUS_LABELS,
+  canTransitionTaskStatus,
+} from "@/models/task-status.js";
+
+// Lista montada a partir da constante compartilhada para que o SQL não
+// possa divergir da regra em JavaScript. São valores internos do enum,
+// nunca entrada de usuário.
+const CLOSED_STATUSES_SQL = CLOSED_TASK_STATUSES.map(
+  (status) => `'${status}'`,
+).join(", ");
+
+// `is_overdue` é derivado na consulta e nunca gravado. Persistir exigiria
+// um job para envelhecer o registro à meia-noite; derivar sempre dá a
+// resposta certa no instante da leitura, de graça. Tarefa encerrada não
+// está atrasada — o prazo dela deixou de valer.
+function isOverdueExpression(prefix) {
+  return `(
+            ${prefix}due_date IS NOT NULL
+            AND ${prefix}due_date < now()
+            AND ${prefix}status NOT IN (${CLOSED_STATUSES_SQL})
+          ) AS is_overdue`;
+}
+
+function assertStatusTransition(currentStatus, nextStatus) {
+  if (canTransitionTaskStatus(currentStatus, nextStatus)) {
+    return;
+  }
+
+  const from = TASK_STATUS_LABELS[currentStatus] ?? currentStatus;
+  const to = TASK_STATUS_LABELS[nextStatus] ?? nextStatus;
+
+  throw new UnprocessableEntityError({
+    message: `Uma tarefa "${from}" não pode passar para "${to}".`,
+    action: CLOSED_TASK_STATUSES.includes(currentStatus)
+      ? "Tarefas concluídas ou canceladas não mudam mais de status."
+      : "Escolha um status válido para a situação atual da tarefa.",
+  });
+}
 
 async function create(tasksInputValues) {
   // Task + assignees são criados na mesma transação: se a inserção dos
@@ -28,7 +68,8 @@ async function create(tasksInputValues) {
         VALUES
           ($1, $2, $3, $4, $5, $6)
         RETURNING
-          *
+          *,
+          ${isOverdueExpression("")}
       ;`,
       values: [
         tasksInputValues.title,
@@ -65,6 +106,7 @@ async function findAll({ userId, view = "all" }) {
       text: `
         SELECT
           t.*,
+          ${isOverdueExpression("t.")},
           COALESCE(
             json_agg(
               json_build_object('id', u.id, 'username', u.username)
@@ -105,6 +147,7 @@ async function findOneById(id) {
       text: `
         SELECT
           t.*,
+          ${isOverdueExpression("t.")},
           COALESCE(
             json_agg(
               json_build_object('id', u.id, 'username', u.username)
@@ -143,6 +186,13 @@ async function findOneById(id) {
 
 async function update(id, tasksInputValues) {
   const currentTask = await findOneById(id);
+
+  // Antes de qualquer escrita: transição inválida não pode gravar nem os
+  // outros campos que vieram na mesma requisição.
+  if ("status" in tasksInputValues) {
+    assertStatusTransition(currentTask.status, tasksInputValues.status);
+  }
+
   const { assigned_to, ...taskFields } = tasksInputValues;
   const taskWithNewValues = { ...currentTask, ...taskFields };
 
@@ -181,7 +231,8 @@ async function update(id, tasksInputValues) {
           id = $1
           AND deleted_at IS NULL
         RETURNING
-          *
+          *,
+          ${isOverdueExpression("")}
       ;`,
       values: [
         task.id,

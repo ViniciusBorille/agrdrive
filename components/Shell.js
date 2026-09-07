@@ -25,7 +25,11 @@ export const PRIORITY_META = {
   URGENT: { label: "Urgente", color: "#c0392b", dot: "#d9483b" },
 };
 
-export function fmtDue(dueDateStr, status) {
+// `isOverdue` vem da API (campo `is_overdue`), comparado no banco contra
+// o instante real. Sem ele, sobra a comparação por dia no fuso do
+// navegador, que é mais grosseira: uma tarefa que vencia hoje às 09:00 já
+// está atrasada às 15:00, mas pelo dia ainda apareceria como "Hoje".
+export function fmtDue(dueDateStr, status, isOverdue) {
   if (!dueDateStr) return { label: "Sem prazo", color: "#a9b2ad" };
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -37,7 +41,7 @@ export function fmtDue(dueDateStr, status) {
   if (status === "COMPLETED" || status === "CANCELLED")
     return { label: short, color: "#a9b2ad" };
   const diff = Math.round((d - today) / 86400000);
-  if (diff < 0) return { label: "Atrasada", color: "#c0392b" };
+  if (isOverdue ?? diff < 0) return { label: "Atrasada", color: "#c0392b" };
   if (diff === 0) return { label: "Hoje", color: "#b5651d" };
   if (diff === 1) return { label: "Amanhã", color: "#b5651d" };
   if (diff <= 6) return { label: `Em ${diff} dias`, color: "#5a635e" };
@@ -1511,8 +1515,10 @@ function NotifButton({ tasks }) {
   const pending = (tasks || [])
     .filter((t) => t.status === "PENDING")
     .sort((a, b) => {
-      const aOver = fmtDue(a.due_date, a.status).label === "Atrasada";
-      const bOver = fmtDue(b.due_date, b.status).label === "Atrasada";
+      const aOver =
+        fmtDue(a.due_date, a.status, a.is_overdue).label === "Atrasada";
+      const bOver =
+        fmtDue(b.due_date, b.status, b.is_overdue).label === "Atrasada";
       if (aOver !== bOver) return aOver ? -1 : 1;
       return PORDER[a.priority] - PORDER[b.priority];
     });
@@ -1624,7 +1630,7 @@ function NotifButton({ tasks }) {
           ) : (
             <div style={{ maxHeight: 360, overflowY: "auto" }}>
               {shown.map((t) => {
-                const due = fmtDue(t.due_date, t.status);
+                const due = fmtDue(t.due_date, t.status, t.is_overdue);
                 const pm = PRIORITY_META[t.priority];
                 return (
                   <div
