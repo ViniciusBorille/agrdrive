@@ -1,3 +1,4 @@
+import { z } from "zod";
 import validator from "@/infra/validator.js";
 import { ValidationError } from "@/infra/errors.js";
 
@@ -143,5 +144,44 @@ describe("infra/validator.js", () => {
         expect.objectContaining({ message: "A senha deve ser um texto." }),
       );
     });
+  });
+});
+
+describe("mensagem de campo não permitido", () => {
+  // O zod ignora o texto passado para `.strict()` e monta a própria
+  // mensagem em inglês. Como todo endpoint do projeto usa `.strict()`, sem
+  // esta tradução o usuário final via "Unrecognized key".
+  const schema = z
+    .object({ nome: z.string() })
+    .strict("Campos não permitidos foram enviados na requisição.");
+
+  // Captura fora do `catch` para o expect não ficar condicional.
+  function messageOf(data) {
+    try {
+      validator.validate(schema, data);
+    } catch (error) {
+      return error.message;
+    }
+    return null;
+  }
+
+  test("traduz e nomeia o campo recusado", () => {
+    expect(() =>
+      validator.validate(schema, { nome: "ok", cor: "azul" }),
+    ).toThrow(ValidationError);
+    expect(messageOf({ nome: "ok", cor: "azul" })).toBe(
+      "Campos não permitidos foram enviados na requisição: cor.",
+    );
+  });
+
+  test("lista todos os campos recusados", () => {
+    const message = messageOf({ nome: "ok", cor: "azul", peso: 3 });
+
+    expect(message).toContain("cor");
+    expect(message).toContain("peso");
+  });
+
+  test("não interfere nas demais mensagens", () => {
+    expect(messageOf({ nome: 123 })).not.toContain("Campos não permitidos");
   });
 });
