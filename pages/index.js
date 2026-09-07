@@ -400,7 +400,7 @@ export default function Home() {
                     const sm = STATUS_META[t.status] || STATUS_META.PENDING;
                     const pm =
                       PRIORITY_META[t.priority] || PRIORITY_META.MEDIUM;
-                    const due = fmtDue(t.due_date, t.status);
+                    const due = fmtDue(t.due_date, t.status, t.is_overdue);
                     return (
                       <div
                         key={t.id}

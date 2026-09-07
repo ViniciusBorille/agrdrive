@@ -170,3 +170,76 @@ describe("GET /api/v1/tasks", () => {
     });
   });
 });
+
+describe("GET /api/v1/tasks (is_overdue)", () => {
+  const DAY_IN_MILISECONDS = 24 * 60 * 60 * 1000;
+
+  test("Marca atraso conforme o prazo e o status", async () => {
+    const owner = await orchestrator.createUser();
+    const activatedOwner = await orchestrator.activateUser(owner);
+    const sessionObject = await orchestrator.createSession(activatedOwner);
+
+    const semPrazo = await orchestrator.createTask({
+      created_by: owner.id,
+      due_date: null,
+    });
+    const prazoFuturo = await orchestrator.createTask({
+      created_by: owner.id,
+      due_date: new Date(Date.now() + 7 * DAY_IN_MILISECONDS).toISOString(),
+    });
+    const prazoVencido = await orchestrator.createTask({
+      created_by: owner.id,
+      due_date: new Date(Date.now() - DAY_IN_MILISECONDS).toISOString(),
+    });
+    // Vencida, mas encerrada: o prazo deixou de valer.
+    const vencidaConcluida = await orchestrator.createTask({
+      created_by: owner.id,
+      status: "COMPLETED",
+      due_date: new Date(Date.now() - DAY_IN_MILISECONDS).toISOString(),
+    });
+
+    const response = await fetch("http:localhost:3000/api/v1/tasks", {
+      headers: { Cookie: `session_id=${sessionObject.token}` },
+    });
+
+    expect(response.status).toBe(200);
+
+    const responseBody = await response.json();
+    const byId = Object.fromEntries(responseBody.map((t) => [t.id, t]));
+
+    expect(byId[semPrazo.id].is_overdue).toBe(false);
+    expect(byId[prazoFuturo.id].is_overdue).toBe(false);
+    expect(byId[prazoVencido.id].is_overdue).toBe(true);
+    expect(byId[vencidaConcluida.id].is_overdue).toBe(false);
+  });
+
+  // O atraso é derivado na leitura: concluir a tarefa já faz a listagem
+  // parar de apontá-la como atrasada, sem nenhum job envolvido.
+  test("Deixa de apontar atraso assim que a tarefa é concluída", async () => {
+    const owner = await orchestrator.createUser();
+    const activatedOwner = await orchestrator.activateUser(owner);
+    const sessionObject = await orchestrator.createSession(activatedOwner);
+
+    const atrasada = await orchestrator.createTask({
+      created_by: owner.id,
+      due_date: new Date(Date.now() - DAY_IN_MILISECONDS).toISOString(),
+    });
+
+    await fetch(`http:localhost:3000/api/v1/tasks/${atrasada.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session_id=${sessionObject.token}`,
+      },
+      body: JSON.stringify({ status: "COMPLETED" }),
+    });
+
+    const response = await fetch("http:localhost:3000/api/v1/tasks", {
+      headers: { Cookie: `session_id=${sessionObject.token}` },
+    });
+    const responseBody = await response.json();
+    const found = responseBody.find((t) => t.id === atrasada.id);
+
+    expect(found.is_overdue).toBe(false);
+  });
+});

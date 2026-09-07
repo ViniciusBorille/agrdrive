@@ -6,7 +6,7 @@ jest.mock("../../../infra/database.js", () => ({
 }));
 
 import task from "@/models/task.js";
-import { NotFoundError } from "@/infra/errors.js";
+import { NotFoundError, UnprocessableEntityError } from "@/infra/errors.js";
 
 // O client da transação é o mesmo objeto passado ao callback; guardamos
 // as chamadas dele à parte para conseguir afirmar sobre cada query.
@@ -254,13 +254,13 @@ describe("models/task.js", () => {
       client.query.mockResolvedValue({ rows: [{ id: "task-1" }] });
       database.query.mockResolvedValue({ rows: [] });
 
-      await task.update("task-1", { status: "DONE" });
+      await task.update("task-1", { status: "COMPLETED" });
 
       expect(client.query.mock.calls[0][0].values).toEqual([
         "task-1",
         "Título antigo",
         "Descrição antiga",
-        "DONE",
+        "COMPLETED",
         "MEDIUM",
         "2026-09-01",
       ]);
@@ -274,7 +274,7 @@ describe("models/task.js", () => {
       client.query.mockResolvedValue({ rows: [{ id: "task-1" }] });
       database.query.mockResolvedValue({ rows: [] });
 
-      await task.update("task-1", { status: "DONE" });
+      await task.update("task-1", { status: "COMPLETED" });
 
       const textos = client.query.mock.calls.map((call) => call[0].text);
       expect(textos.some((t) => t.includes("DELETE FROM task_assignees"))).toBe(
@@ -336,7 +336,7 @@ describe("models/task.js", () => {
       database.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
 
       await expect(
-        task.update("task-sumida", { status: "DONE" }),
+        task.update("task-sumida", { status: "COMPLETED" }),
       ).rejects.toThrow(NotFoundError);
       expect(database.transaction).not.toHaveBeenCalled();
     });
@@ -369,6 +369,101 @@ describe("models/task.js", () => {
       database.query.mockResolvedValue({ rowCount: 0, rows: [] });
 
       await expect(task.remove("task-1")).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe("máquina de estados do status", () => {
+    function mockTaskWithStatus(status) {
+      database.query.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [
+          {
+            id: "task-1",
+            title: "Título",
+            description: null,
+            status,
+            priority: "MEDIUM",
+            due_date: null,
+            assignees: [],
+          },
+        ],
+      });
+    }
+
+    // A recusa precisa vir antes da transação: senão o título viajaria
+    // junto com um status inválido e seria gravado assim mesmo.
+    test("recusa a transição sem escrever nada no banco", async () => {
+      mockTaskWithStatus("COMPLETED");
+      const client = mockTransaction();
+
+      await expect(
+        task.update("task-1", { status: "PENDING", title: "Novo título" }),
+      ).rejects.toThrow(UnprocessableEntityError);
+
+      expect(database.transaction).not.toHaveBeenCalled();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    test("deixa passar uma transição válida", async () => {
+      mockTaskWithStatus("PENDING");
+      const client = mockTransaction();
+      client.query.mockResolvedValue({ rows: [{ id: "task-1" }] });
+      database.query.mockResolvedValue({ rows: [] });
+
+      await expect(
+        task.update("task-1", { status: "IN_PROGRESS" }),
+      ).resolves.toMatchObject({ id: "task-1" });
+    });
+
+    // Corrigir o título de uma tarefa encerrada continua valendo: a regra
+    // trava o status, não a tarefa inteira.
+    test("não bloqueia edição de outros campos em tarefa encerrada", async () => {
+      mockTaskWithStatus("COMPLETED");
+      const client = mockTransaction();
+      client.query.mockResolvedValue({ rows: [{ id: "task-1" }] });
+      database.query.mockResolvedValue({ rows: [] });
+
+      await expect(
+        task.update("task-1", { title: "Título corrigido" }),
+      ).resolves.toMatchObject({ id: "task-1" });
+    });
+  });
+
+  describe("is_overdue", () => {
+    // Derivado na consulta: estado gravado precisaria de um job para
+    // virar "atrasado" à meia-noite.
+    test("é calculado na listagem, não lido de uma coluna", async () => {
+      database.query.mockResolvedValue({ rows: [] });
+
+      await task.findAll({ userId: "user-1" });
+
+      const text = normalize(database.query.mock.calls[0][0].text);
+      expect(text).toContain("AS is_overdue");
+      expect(text).toContain("due_date < now()");
+    });
+
+    test("é calculado também no detalhe", async () => {
+      database.query.mockResolvedValue({
+        rowCount: 1,
+        rows: [{ id: "task-1", assignees: [] }],
+      });
+
+      await task.findOneById("task-1");
+
+      expect(normalize(database.query.mock.calls[0][0].text)).toContain(
+        "AS is_overdue",
+      );
+    });
+
+    // Tarefa encerrada não está atrasada — o prazo dela deixou de valer.
+    test("exclui os status encerrados da conta", async () => {
+      database.query.mockResolvedValue({ rows: [] });
+
+      await task.findAll({ userId: "user-1" });
+
+      expect(normalize(database.query.mock.calls[0][0].text)).toContain(
+        "NOT IN ('COMPLETED', 'CANCELLED')",
+      );
     });
   });
 });

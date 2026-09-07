@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
 import useSWR, { mutate } from "swr";
 import Shell, { fmtDue, STATUS_META, PRIORITY_META } from "@/components/Shell";
+import { allowedTaskStatusTransitions } from "@/models/task-status.js";
 
 const fetcher = (url) =>
   fetch(url).then((r) => {
@@ -642,7 +643,13 @@ function TaskRow({ t, userId }) {
 
   const sm = STATUS_META[t.status] || STATUS_META.PENDING;
   const pm = PRIORITY_META[t.priority] || PRIORITY_META.MEDIUM;
-  const due = fmtDue(t.due_date, t.status);
+  const due = fmtDue(t.due_date, t.status, t.is_overdue);
+
+  // Mesma máquina de estados que o servidor usa para validar. Oferecer no
+  // menu um status que o PATCH vai recusar transformaria a regra num erro
+  // depois do clique, em vez de uma opção que simplesmente não aparece.
+  const allowedStatuses = allowedTaskStatusTransitions(t.status);
+  const isClosed = allowedStatuses.length <= 1;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -920,9 +927,11 @@ function TaskRow({ t, userId }) {
                   padding: "5px 10px 3px",
                 }}
               >
-                Alterar status
+                {isClosed ? "Status" : "Alterar status"}
               </div>
-              {STATUS_OPTIONS.map((opt) => (
+              {STATUS_OPTIONS.filter((opt) =>
+                allowedStatuses.includes(opt.value),
+              ).map((opt) => (
                 <MenuRow
                   key={opt.value}
                   label={opt.label}
@@ -931,6 +940,18 @@ function TaskRow({ t, userId }) {
                   onClick={() => changeStatus(opt.value)}
                 />
               ))}
+              {isClosed && (
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    color: "#9aa39e",
+                    padding: "2px 10px 7px",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  Tarefa encerrada — o status não muda mais.
+                </div>
+              )}
 
               {/* Creator actions */}
               {isCreator && (

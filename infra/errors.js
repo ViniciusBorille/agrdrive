@@ -140,3 +140,29 @@ export class ForbiddenError extends Error {
     };
   }
 }
+
+// 422 e não 400: o corpo da requisição está bem formado e passou pela
+// validação de schema — o que não é aceitável é a operação diante do
+// estado atual do recurso. Distinguir os dois ajuda o cliente da API a
+// saber se vale a pena reenviar com outros dados ou se não há o que
+// corrigir na requisição.
+export class UnprocessableEntityError extends Error {
+  constructor({ cause, message, action }) {
+    super(message || "Não foi possível processar esta operação.", {
+      cause,
+    });
+    this.name = "UnprocessableEntityError";
+    this.action =
+      action || "Verifique se a operação é válida para o estado atual.";
+    this.statusCode = 422;
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      action: this.action,
+      status_code: this.statusCode,
+    };
+  }
+}

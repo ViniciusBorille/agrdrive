@@ -11,6 +11,7 @@ import {
   NotFoundError,
   UnauthorizedError,
   ForbiddenError,
+  UnprocessableEntityError,
 } from "@/infra/errors";
 
 function onNoMatchHandler(request, response) {
@@ -34,7 +35,11 @@ function onErrorHandler(error, request, response) {
     });
     return response.status(error.statusCode).json(error);
   }
-  if (error instanceof ValidationError || error instanceof NotFoundError) {
+  if (
+    error instanceof ValidationError ||
+    error instanceof NotFoundError ||
+    error instanceof UnprocessableEntityError
+  ) {
     return response.status(error.statusCode).json(error);
   }
 
