@@ -691,6 +691,7 @@ export default function Shell({ children, requireFeature }) {
   const isUsuarios = router.pathname === "/usuarios";
   const isIndicadores = router.pathname === "/indicadores";
   const isAgenda = router.pathname === "/agenda";
+  const isNotificacoes = router.pathname === "/configuracoes/notificacoes";
 
   const pageTitle = isTarefas
     ? "Tarefas"
@@ -700,7 +701,9 @@ export default function Shell({ children, requireFeature }) {
         ? "Indicadores"
         : isAgenda
           ? "Agenda de campo"
-          : "Início";
+          : isNotificacoes
+            ? "Notificações"
+            : "Início";
   const pageSubtitle = isTarefas
     ? "Gestão de tarefas da equipe"
     : isUsuarios
@@ -709,7 +712,9 @@ export default function Shell({ children, requireFeature }) {
         ? "Métricas e desempenho da equipe"
         : isAgenda
           ? "Sincronizada com o Google Calendar"
-          : "Visão geral da sua operação";
+          : isNotificacoes
+            ? "O que você recebe por e-mail e quando"
+            : "Visão geral da sua operação";
 
   if (isLoading || (!user && !error)) {
     return <div style={{ minHeight: "100vh", background: "#eef2ef" }} />;
@@ -891,6 +896,25 @@ export default function Shell({ children, requireFeature }) {
             }
           />
         )}
+
+        <NavButton
+          active={isNotificacoes}
+          onClick={() => router.push("/configuracoes/notificacoes")}
+          label="Notificações"
+          icon={
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+            </svg>
+          }
+        />
 
         <div
           style={{

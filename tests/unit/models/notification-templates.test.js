@@ -1,7 +1,6 @@
 import {
   buildNotificationEmail,
   formatEventAt,
-  humanizeOffset,
 } from "@/models/notification-templates.js";
 
 const user = {
@@ -29,16 +28,6 @@ function visita(title, offsetMinutes = 120) {
 }
 
 describe("models/notification-templates.js", () => {
-  describe(".humanizeOffset()", () => {
-    test("fala em dias, horas ou minutos conforme o valor", () => {
-      expect(humanizeOffset(1440)).toBe("1 dia");
-      expect(humanizeOffset(4320)).toBe("3 dias");
-      expect(humanizeOffset(60)).toBe("1 hora");
-      expect(humanizeOffset(120)).toBe("2 horas");
-      expect(humanizeOffset(90)).toBe("90 minutos");
-    });
-  });
-
   describe(".formatEventAt()", () => {
     // A data no e-mail precisa bater com a que a pessoa vê na tela.
     test("formata no fuso do destinatário", () => {

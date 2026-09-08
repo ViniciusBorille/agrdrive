@@ -1,4 +1,5 @@
 import webserver from "@/infra/webserver.js";
+import { humanizeOffset } from "@/models/notification-reminder.js";
 
 // Composição do e-mail de notificação. Módulo puro: recebe dados, devolve
 // texto. Não fala com banco nem com SMTP, então dá para conferir o que o
@@ -22,20 +23,6 @@ const TYPE_LABELS = {
     verb: "acontece",
   },
 };
-
-export function humanizeOffset(minutes) {
-  if (minutes % 1440 === 0) {
-    const days = minutes / 1440;
-    return days === 1 ? "1 dia" : `${days} dias`;
-  }
-
-  if (minutes % 60 === 0) {
-    const hours = minutes / 60;
-    return hours === 1 ? "1 hora" : `${hours} horas`;
-  }
-
-  return `${minutes} minutos`;
-}
 
 // A data precisa aparecer no fuso de quem lê, senão o e-mail contradiz o
 // que a pessoa vê na tela.
