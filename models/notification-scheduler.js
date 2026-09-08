@@ -38,13 +38,14 @@ const SCHEDULED_FOR_SQL = `
 // sobrevive ao ON CONFLICT ganhou a corrida e é o único autorizado a
 // enviar. Duas execuções simultâneas do job não duplicam, e não há lock na
 // aplicação — quem resolve é a chave única.
-function buildReservationQuery(type, baseQuery) {
+// Os candidatos: o que já venceu e ainda está dentro do horizonte, com o
+// status que a linha teria. Serve tanto para reservar de verdade quanto
+// para o modo seco.
+function buildCandidateQuery(type, baseQuery) {
   return `
-    INSERT INTO notification_deliveries
-      (user_id, type, subject_id, offset_minutes, scheduled_for, status)
     SELECT
       candidato.user_id,
-      '${type}'::notification_type,
+      '${type}'::notification_type AS type,
       candidato.subject_id,
       candidato.offset_minutes,
       candidato.scheduled_for,
@@ -52,7 +53,7 @@ function buildReservationQuery(type, baseQuery) {
         WHEN candidato.scheduled_for > $1::timestamptz - ($2 * interval '1 minute')
           THEN 'PENDING'
         ELSE 'SKIPPED'
-      END::notification_delivery_status
+      END::notification_delivery_status AS status
     FROM (
       SELECT
         base.user_id,
@@ -63,11 +64,37 @@ function buildReservationQuery(type, baseQuery) {
     ) AS candidato
     WHERE
       candidato.scheduled_for <= $1::timestamptz
-      AND candidato.scheduled_for > $1::timestamptz - ($3 * interval '1 minute')
+      AND candidato.scheduled_for > $1::timestamptz - ($3 * interval '1 minute')`;
+}
+
+function buildReservationQuery(type, baseQuery) {
+  return `
+    INSERT INTO notification_deliveries
+      (user_id, type, subject_id, offset_minutes, scheduled_for, status)
+    ${buildCandidateQuery(type, baseQuery)}
     ON CONFLICT
       (user_id, type, subject_id, offset_minutes)
     DO NOTHING
     RETURNING *
+  ;`;
+}
+
+// Modo seco: mesma apuração, sem gravar. O `NOT EXISTS` reproduz o que o
+// `ON CONFLICT DO NOTHING` descartaria, então a contagem bate com o que uma
+// execução real produziria — que é a única forma de o modo seco valer algo.
+function buildPreviewQuery(type, baseQuery) {
+  return `
+    SELECT
+      previsto.*
+    FROM (${buildCandidateQuery(type, baseQuery)}) AS previsto
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM notification_deliveries d
+      WHERE d.user_id = previsto.user_id
+        AND d.type = previsto.type
+        AND d.subject_id = previsto.subject_id
+        AND d.offset_minutes = previsto.offset_minutes
+    )
   ;`;
 }
 
@@ -112,9 +139,11 @@ const VISIT_UPCOMING_BASE = `
     v.deleted_at IS NULL
     AND 'use:agenda' = ANY(u.features)`;
 
-async function reserveByType(type, baseQuery, now) {
+async function reserveByType(type, baseQuery, now, dryRun) {
   const results = await database.query({
-    text: buildReservationQuery(type, baseQuery),
+    text: dryRun
+      ? buildPreviewQuery(type, baseQuery)
+      : buildReservationQuery(type, baseQuery),
     values: [now, TOLERANCE_IN_MINUTES, BACKFILL_LIMIT_IN_MINUTES],
   });
 
@@ -127,10 +156,15 @@ async function reserveByType(type, baseQuery, now) {
 //
 // `now` entra por parâmetro para o teste conseguir posicionar o relógio em
 // vez de depender do momento em que roda.
-async function reserveDue({ now = new Date() } = {}) {
+async function reserveDue({ now = new Date(), dryRun = false } = {}) {
   const reserved = [
-    ...(await reserveByType("TASK_DUE", TASK_DUE_BASE, now)),
-    ...(await reserveByType("VISIT_UPCOMING", VISIT_UPCOMING_BASE, now)),
+    ...(await reserveByType("TASK_DUE", TASK_DUE_BASE, now, dryRun)),
+    ...(await reserveByType(
+      "VISIT_UPCOMING",
+      VISIT_UPCOMING_BASE,
+      now,
+      dryRun,
+    )),
   ];
 
   return {
