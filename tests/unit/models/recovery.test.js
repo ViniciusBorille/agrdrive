@@ -51,15 +51,15 @@ describe("models/recovery.js", () => {
       );
     });
 
-    test("envia a partir do remetente institucional", async () => {
+    // O remetente institucional saiu dos models e virou o padrão do
+    // `infra/email.js`; aqui basta garantir que este model não sobrescreve.
+    test("delega o remetente ao padrão central", async () => {
       await recovery.sendEmailToUser(
         { username: "Fulano", email: "fulano@agrdrive.com.br" },
         { token: "token-cru" },
       );
 
-      expect(email.send.mock.calls[0][0].from).toBe(
-        "AgrDrive <contato@agrdrive.com.br>",
-      );
+      expect(email.send.mock.calls[0][0]).not.toHaveProperty("from");
     });
   });
 

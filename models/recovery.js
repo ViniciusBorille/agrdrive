@@ -71,7 +71,6 @@ async function create(userId) {
 
 async function sendEmailToUser(user, recoveryToken) {
   await email.send({
-    from: "AgrDrive <contato@agrdrive.com.br>",
     to: user.email,
     subject: "Recuperação de senha no AgrDrive",
     text: `${user.username}, clique no link abaixo para definir uma nova senha no AgrDrive:
