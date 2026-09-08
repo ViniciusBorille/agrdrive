@@ -261,6 +261,86 @@ describe("models/notification-scheduler.js", () => {
     });
   });
 
+  // O caso concreto pedido: tarefa que vai até 29/09, aviso de 1 dia,
+  // hora de envio 07:00. Tem que sair em 28/09 às 07:00, e não em 27/09
+  // nem em outra hora. É o cenário que o formulário antigo errava, porque
+  // gravava meia-noite UTC e jogava a tarefa para o dia anterior.
+  describe(".reserveDue() com o prazo no fim do dia local", () => {
+    test("tarefa até 29/09 avisa em 28/09 às 07:00", async () => {
+      await limparEntregas();
+      const user = await criarUsuario();
+      await definirPreferencia(user.id, "TASK_DUE", {
+        sendAtTime: "07:00",
+        reminders: [1440],
+      });
+
+      // Como o formulário passa a gravar: fim do dia 29/09 em -03:00.
+      const task = await orchestrator.createTask({
+        created_by: user.id,
+        assigned_to: user.id,
+        due_date: "2026-09-29T23:59:59.999-03:00",
+      });
+
+      await notificationScheduler.reserveDue({
+        now: new Date("2026-09-28T07:00:00-03:00"),
+      });
+
+      const entregas = await entregasDe(task.id);
+      expect(entregas).toHaveLength(1);
+      expect(entregas[0].status).toBe("PENDING");
+      // 10:00Z é 07:00 em America/Sao_Paulo.
+      expect(entregas[0].scheduled_for.toISOString()).toBe(
+        "2026-09-28T10:00:00.000Z",
+      );
+    });
+
+    test("no dia 27 ainda não avisa", async () => {
+      await limparEntregas();
+      const user = await criarUsuario();
+      await definirPreferencia(user.id, "TASK_DUE", {
+        sendAtTime: "07:00",
+        reminders: [1440],
+      });
+
+      const task = await orchestrator.createTask({
+        created_by: user.id,
+        assigned_to: user.id,
+        due_date: "2026-09-29T23:59:59.999-03:00",
+      });
+
+      await notificationScheduler.reserveDue({
+        now: new Date("2026-09-27T23:00:00-03:00"),
+      });
+
+      expect(await entregasDe(task.id)).toHaveLength(0);
+    });
+
+    test("aviso de 3 dias sai em 26/09, três dias de calendário antes", async () => {
+      await limparEntregas();
+      const user = await criarUsuario();
+      await definirPreferencia(user.id, "TASK_DUE", {
+        sendAtTime: "07:00",
+        reminders: [4320],
+      });
+
+      const task = await orchestrator.createTask({
+        created_by: user.id,
+        assigned_to: user.id,
+        due_date: "2026-09-29T23:59:59.999-03:00",
+      });
+
+      await notificationScheduler.reserveDue({
+        now: new Date("2026-09-26T07:30:00-03:00"),
+      });
+
+      const entregas = await entregasDe(task.id);
+      expect(entregas).toHaveLength(1);
+      expect(entregas[0].scheduled_for.toISOString()).toBe(
+        "2026-09-26T10:00:00.000Z",
+      );
+    });
+  });
+
   describe(".reserveDue() com visitas", () => {
     // Antecedência menor que um dia é conceito de relógio: "2 horas antes"
     // tem que ser duas horas antes, não às 08:00.
