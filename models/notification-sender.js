@@ -1,6 +1,7 @@
 import database from "@/infra/database.js";
 import email from "@/infra/email.js";
 import logger from "@/infra/logger.js";
+import notificationUnsubscribe from "@/models/notification-unsubscribe.js";
 import { buildNotificationEmail } from "@/models/notification-templates.js";
 
 // Falha de SMTP costuma ser momentânea, então desistir na primeira perderia
@@ -142,7 +143,20 @@ async function sendPending({ limit = DEFAULT_BATCH_SIZE } = {}) {
 
   for (const { user, rows } of groupByUser(pending)) {
     const ids = rows.map((row) => row.id);
-    const message = buildNotificationEmail({ user, items: toItems(rows) });
+    const items = toItems(rows);
+
+    // Um token por e-mail, carregando os tipos que estão nele: é o que
+    // permite oferecer "desligar só este aviso" na página de descadastro,
+    // em vez de só o tudo ou nada.
+    const unsubscribeToken = await notificationUnsubscribe.create(user.id, [
+      ...new Set(items.map((item) => item.type)),
+    ]);
+
+    const message = buildNotificationEmail({
+      user,
+      items,
+      unsubscribeToken: unsubscribeToken.token,
+    });
 
     try {
       await email.send({
@@ -150,6 +164,7 @@ async function sendPending({ limit = DEFAULT_BATCH_SIZE } = {}) {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        headers: message.headers,
       });
 
       await markSent(ids);

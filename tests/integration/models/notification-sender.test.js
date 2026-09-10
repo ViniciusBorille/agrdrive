@@ -9,6 +9,7 @@ import database from "@/infra/database.js";
 import orchestrator from "@/tests/orchestrator.js";
 import notificationScheduler from "@/models/notification-scheduler.js";
 import notificationSender from "@/models/notification-sender.js";
+import notificationUnsubscribe from "@/models/notification-unsubscribe.js";
 import { ServiceError } from "@/infra/errors.js";
 
 beforeAll(async () => {
@@ -299,6 +300,58 @@ describe("models/notification-sender.js", () => {
 
       const entregasSaudavel = await entregasDoUsuario(saudavel.id);
       expect(entregasSaudavel[0].status).toBe("SENT");
+    });
+  });
+
+  describe("descadastro", () => {
+    // O token nasce no envio, não na configuração: cada e-mail carrega o
+    // seu, com os tipos que estão dentro dele.
+    test("cada e-mail sai com um token de descadastro utilizável", async () => {
+      const user = await criarUsuarioComPreferencia();
+      await orchestrator.createTask({
+        created_by: user.id,
+        assigned_to: user.id,
+        due_date: PRAZO,
+      });
+
+      await notificationScheduler.reserveDue({ now: DEPOIS_DO_GATILHO });
+      await notificationSender.sendPending();
+
+      const enviado = email.send.mock.calls[0][0];
+      const token = enviado.text.match(/\/descadastro\/([a-f0-9]{64})/)?.[1];
+
+      expect(token).toBeTruthy();
+      expect(enviado.headers["List-Unsubscribe"]).toContain(token);
+      expect(enviado.headers["List-Unsubscribe-Post"]).toBe(
+        "List-Unsubscribe=One-Click",
+      );
+
+      const found = await notificationUnsubscribe.findOneValidByToken(token);
+      expect(found.user_id).toBe(user.id);
+      expect(found.types).toEqual(["TASK_DUE"]);
+    });
+
+    test("dois e-mails não compartilham o mesmo token", async () => {
+      const primeiro = await criarUsuarioComPreferencia();
+      const segundo = await criarUsuarioComPreferencia();
+
+      for (const user of [primeiro, segundo]) {
+        await orchestrator.createTask({
+          created_by: user.id,
+          assigned_to: user.id,
+          due_date: PRAZO,
+        });
+      }
+
+      await notificationScheduler.reserveDue({ now: DEPOIS_DO_GATILHO });
+      await notificationSender.sendPending();
+
+      const tokens = email.send.mock.calls.map(
+        (call) => call[0].text.match(/\/descadastro\/([a-f0-9]{64})/)[1],
+      );
+
+      expect(tokens).toHaveLength(2);
+      expect(new Set(tokens).size).toBe(2);
     });
   });
 

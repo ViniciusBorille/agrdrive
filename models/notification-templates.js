@@ -81,7 +81,7 @@ function groupByType(items) {
   return groups;
 }
 
-function buildText(user, items, settingsUrl) {
+function buildText(user, items, settingsUrl, unsubscribeUrl) {
   const lines = [`${user.username}, você tem avisos no AgrDrive:`, ""];
 
   for (const [type, groupItems] of groupByType(items)) {
@@ -100,6 +100,16 @@ function buildText(user, items, settingsUrl) {
 
   lines.push("Para escolher o que recebe e quando, acesse:");
   lines.push(settingsUrl);
+
+  // Sem saída visível, o caminho que sobra para quem se incomodou é o
+  // botão de spam — e isso derruba a entrega de todo o domínio, inclusive
+  // do e-mail de recuperação de senha.
+  if (unsubscribeUrl) {
+    lines.push("");
+    lines.push("Para parar de receber estes avisos, acesse:");
+    lines.push(unsubscribeUrl);
+  }
+
   lines.push("");
   lines.push("Equipe AgrDrive");
 
@@ -114,7 +124,7 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function buildHtml(user, items, settingsUrl) {
+function buildHtml(user, items, settingsUrl, unsubscribeUrl) {
   const sections = [];
 
   for (const [type, groupItems] of groupByType(items)) {
@@ -146,7 +156,13 @@ function buildHtml(user, items, settingsUrl) {
       <p style="margin:0 0 8px;">${escapeHtml(user.username)}, você tem avisos:</p>
       ${sections.join("")}
       <p style="color:#8a938e;font-size:12px;margin-top:28px;border-top:1px solid #eef1ef;padding-top:14px;">
-        <a href="${settingsUrl}" style="color:#8a938e;">Escolher o que você recebe e quando</a>
+        <a href="${settingsUrl}" style="color:#8a938e;">Escolher o que você recebe e quando</a>${
+          unsubscribeUrl
+            ? `
+        &nbsp;·&nbsp;
+        <a href="${unsubscribeUrl}" style="color:#8a938e;">Parar de receber</a>`
+            : ""
+        }
       </p>
     </div>`;
 }
@@ -155,12 +171,36 @@ function buildHtml(user, items, settingsUrl) {
 // avisos viram três itens numa mensagem, não três mensagens — a diferença
 // entre uma funcionalidade útil e um motivo para marcar o remetente como
 // spam.
-export function buildNotificationEmail({ user, items }) {
+export function buildNotificationEmail({ user, items, unsubscribeToken }) {
   const settingsUrl = `${webserver.origin}/configuracoes/notificacoes`;
+  const unsubscribeUrl = unsubscribeToken
+    ? `${webserver.origin}/descadastro/${unsubscribeToken}`
+    : null;
 
   return {
     subject: buildSubject(items),
-    text: buildText(user, items, settingsUrl),
-    html: buildHtml(user, items, settingsUrl),
+    text: buildText(user, items, settingsUrl, unsubscribeUrl),
+    html: buildHtml(user, items, settingsUrl, unsubscribeUrl),
+    headers: buildUnsubscribeHeaders(unsubscribeToken),
+  };
+}
+
+// RFC 8058. É o que faz o Gmail mostrar o botão nativo de cancelar
+// inscrição, ao lado do remetente — quem usa esse botão não usa o de spam,
+// e é a diferença entre perder um destinatário e perder o domínio.
+//
+// O `One-Click` é um POST do provedor, não um GET: pré-carregamento de
+// link do cliente de e-mail não dispara. Por isso ele pode aplicar direto,
+// enquanto o link humano leva para uma página que confirma antes.
+function buildUnsubscribeHeaders(unsubscribeToken) {
+  if (!unsubscribeToken) {
+    return {};
+  }
+
+  const oneClickUrl = `${webserver.origin}/api/v1/notifications/unsubscribe/${unsubscribeToken}`;
+
+  return {
+    "List-Unsubscribe": `<${oneClickUrl}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
   };
 }

@@ -161,4 +161,66 @@ describe("models/notification-templates.js", () => {
       expect(html).not.toContain(user.email);
     });
   });
+
+  describe("descadastro", () => {
+    const TOKEN = "abc123";
+
+    // Sem saída visível, quem se incomoda usa o botão de spam — e isso
+    // derruba a entrega de todo o domínio, inclusive do e-mail de
+    // recuperação de senha.
+    test("o rodapé leva para o descadastro, em texto e em HTML", () => {
+      const { text, html } = buildNotificationEmail({
+        user,
+        items: [tarefa("Entregar laudo")],
+        unsubscribeToken: TOKEN,
+      });
+
+      expect(text).toContain(`/descadastro/${TOKEN}`);
+      expect(html).toContain(`/descadastro/${TOKEN}`);
+      expect(html).toContain("Parar de receber");
+    });
+
+    // RFC 8058: é o que faz o Gmail mostrar o botão nativo de cancelar
+    // inscrição ao lado do remetente.
+    test("manda os cabeçalhos List-Unsubscribe", () => {
+      const { headers } = buildNotificationEmail({
+        user,
+        items: [tarefa("Entregar laudo")],
+        unsubscribeToken: TOKEN,
+      });
+
+      expect(headers["List-Unsubscribe"]).toContain(
+        `/api/v1/notifications/unsubscribe/${TOKEN}`,
+      );
+      expect(headers["List-Unsubscribe"]).toMatch(/^<.*>$/);
+      expect(headers["List-Unsubscribe-Post"]).toBe(
+        "List-Unsubscribe=One-Click",
+      );
+    });
+
+    // O One-Click aponta para a API, que aplica direto; o link humano
+    // aponta para a página, que confirma antes. Trocar um pelo outro faria
+    // o pré-carregamento do cliente de e-mail descadastrar sozinho.
+    test("o link humano e o One-Click são endereços diferentes", () => {
+      const { text, headers } = buildNotificationEmail({
+        user,
+        items: [tarefa("Entregar laudo")],
+        unsubscribeToken: TOKEN,
+      });
+
+      expect(text).not.toContain("/api/v1/notifications/unsubscribe");
+      expect(headers["List-Unsubscribe"]).not.toContain("/descadastro/");
+    });
+
+    test("sem token, nada de descadastro no e-mail", () => {
+      const { text, html, headers } = buildNotificationEmail({
+        user,
+        items: [tarefa("Entregar laudo")],
+      });
+
+      expect(text).not.toContain("/descadastro/");
+      expect(html).not.toContain("Parar de receber");
+      expect(headers).toEqual({});
+    });
+  });
 });
