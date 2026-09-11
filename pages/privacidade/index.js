@@ -846,7 +846,7 @@ export default function Privacidade() {
                   {
                     label: "Resend",
                     value:
-                      "Entrega das mensagens de ativação de conta e recuperação de senha. Recebe o seu endereço de e-mail.",
+                      "Entrega das mensagens do sistema: ativação de conta, recuperação de senha e os avisos agendados descritos na seção 6. Recebe o seu endereço de e-mail e o conteúdo da mensagem, que inclui o título e a data dos itens avisados.",
                   },
                   {
                     label: "Google LLC",

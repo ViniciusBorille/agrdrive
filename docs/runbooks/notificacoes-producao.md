@@ -14,6 +14,23 @@ autenticar o domínio de envio (AG-116).
 > **modo seco**, que não envia nada; a parte B autentica o domínio; só
 > então a parte A é concluída.
 
+## Pré-requisito: o código precisa estar na branch padrão
+
+Nada disto funciona enquanto o épico viver na branch `notifications`.
+Publicar as variáveis de ambiente antes do merge não quebra nada, mas
+também não liga nada — vale conferir que os três pontos abaixo já
+aconteceram antes de tentar qualquer passo:
+
+- **O endpoint existe em produção.** `/api/v1/notifications/dispatch` só
+  passa a responder depois que o código estiver na `main` e a Vercel tiver
+  feito o deploy. Antes disso, a chamada devolve 404, não 401.
+- **O workflow existe na branch padrão.** O GitHub só executa `schedule` a
+  partir do arquivo que está na branch padrão. Com
+  `.github/workflows/notifications.yaml` apenas na branch de trabalho, o
+  cron não roda nem aparece na aba Actions.
+- **As migrations rodaram.** As tabelas de preferências, entregas e tokens
+  de descadastro precisam existir no banco de produção.
+
 ## Parte A — ligar o agendador (AG-112)
 
 O agendamento vive no GitHub Actions, não no Vercel Cron, porque o plano
@@ -143,68 +160,50 @@ execução que você não disparou à mão.
 
 ---
 
-## Parte B — autenticar o domínio (AG-116)
+## Parte B — entregabilidade com o Resend (AG-116)
 
-Sem isso, tudo o que foi construído no épico não chega. E o modo de falhar
+Sem isto, tudo o que foi construído no épico não chega. E o modo de falhar
 é silencioso: ninguém reclama de e-mail que não recebeu, e o cliente
 conclui que a funcionalidade não funciona.
 
-### B1. Descobrir o que roda hoje
+### B0. Onde já estamos
 
-As variáveis `EMAIL_SMTP_*` vivem no ambiente da Vercel e não estão no
-repositório. Antes de escolher qualquer coisa, veja o que já existe:
+O Resend **já é o provedor**: manda a ativação de conta e a recuperação de
+senha, e está declarado na política de privacidade. Isso responde sozinho
+os dois primeiros passos que a issue previa — levantar o que roda hoje e
+escolher provedor — e provavelmente boa parte do DNS.
 
-**Settings → Environment Variables**, e anote `EMAIL_SMTP_HOST`,
-`EMAIL_SMTP_PORT` e `EMAIL_FROM`.
+Provavelmente, porque o Resend só deixa enviar a partir do seu domínio
+depois de verificá-lo, e verificar significa **SPF e DKIM já publicados**.
+Se a ativação de conta chega hoje na caixa de entrada de endereços
+quaisquer, esses dois registros existem.
 
-Pode ser que o provedor atual já resolva e o trabalho seja só de DNS.
+O que sobra é menor que a issue original sugeria, mas não é zero — e a
+parte que sobra é justamente a que separa e-mail transacional de e-mail em
+lote.
 
-### B2. Escolher o provedor, se o atual não servir
+### B1. Conferir se o remetente bate com o domínio verificado
 
-Candidatos: Resend, SendGrid, Amazon SES, Postmark. Critérios que
-importam aqui:
+No painel do Resend, em **Domains**: o domínio precisa estar _Verified_.
+Anote **qual** domínio está lá — raiz (`agrdrive.com.br`) ou subdomínio
+(`send.agrdrive.com.br`), que é o padrão que o Resend sugere.
 
-- domínio próprio com DKIM (não "envie pelo nosso domínio");
-- cota compatível com a projeção do B6;
-- webhook de bounce e log de entrega — sem isso o B7 não tem como existir;
-- painel que mostre a mensagem entregue, não só "aceita".
+Agora, no ambiente da Vercel, confira `EMAIL_FROM`. Quando a variável não
+existe, o código cai em `AgrDrive <contato@agrdrive.com.br>`. **Os dois
+precisam falar do mesmo domínio.** Se o Resend verificou
+`send.agrdrive.com.br` e o `EMAIL_FROM` diz `@agrdrive.com.br`, o envio é
+recusado ou cai direto em spam.
 
-> **Antes de culpar o código:** `infra/email.js` usa
-> `secure: NODE_ENV === "production"`, o que significa TLS direto na porta
-> **465**. Provedor que espera STARTTLS na **587** não vai conectar, e o
-> sintoma parece bug da aplicação. Se o provedor escolhido usar 587, o
-> ajuste é em `infra/email.js` — me chame que eu faço.
->
-> Se o provedor tiver **API HTTP**, vale considerar trocar o SMTP por ela:
-> numa função serverless o handshake SMTP é lento e a conexão não se
-> reaproveita entre invocações.
+Confira também `EMAIL_SMTP_PORT`. O código usa
+`secure: NODE_ENV === "production"`, que é TLS direto na porta **465**. O
+Resend aceita 465, então deve estar certo — mas se a porta configurada for
+587, que é STARTTLS, a conexão não se estabelece e o sintoma parece bug da
+aplicação.
 
-### B3. Publicar os registros de DNS
+### B2. DMARC, que o Resend não publica por você
 
-No painel de DNS de `agrdrive.com.br`. Os valores exatos saem do provedor;
-a forma é esta:
-
-**SPF** — autoriza o provedor a enviar pelo domínio. Se já existir um
-registro `v=spf1`, **edite o existente**; dois registros SPF invalidam um
-ao outro.
-
-```text
-Tipo: TXT   Nome: @   Valor: v=spf1 include:<host-do-provedor> ~all
-```
-
-> SPF tem limite de **10 consultas de DNS**. Cada `include:` conta, e
-> encadear vários serviços estoura o limite silenciosamente — a validação
-> inteira cai, sem mensagem de erro em lugar nenhum.
-
-**DKIM** — assina as mensagens. Quase sempre são CNAMEs que o provedor
-entrega prontos:
-
-```text
-Tipo: CNAME   Nome: <seletor>._domainkey   Valor: <fornecido pelo provedor>
-```
-
-**DMARC** — diz ao destinatário o que fazer quando SPF e DKIM falham.
-Comece observando, sem bloquear nada:
+SPF e DKIM saem da verificação do domínio. **DMARC não** — é registro seu,
+e é o que mais pesa quando o volume deixa de ser reativo.
 
 ```text
 Tipo: TXT   Nome: _dmarc   Valor: v=DMARC1; p=none; rua=mailto:dmarc@agrdrive.com.br; fo=1
@@ -215,81 +214,99 @@ Tipo: TXT   Nome: _dmarc   Valor: v=DMARC1; p=none; rua=mailto:dmarc@agrdrive.co
 > para fora do sistema. Suba por etapas: `p=none` → leia os relatórios por
 > uma ou duas semanas → `p=quarantine` → só então considere `p=reject`.
 
-### B4. Validar com ferramenta externa
+Se já existir um registro `v=spf1` no domínio, confira que ele não foi
+duplicado quando o Resend foi configurado: dois registros SPF invalidam um
+ao outro, e o limite de **10 consultas de DNS** estoura em silêncio.
 
-Depois da propagação (minutos a algumas horas), confira em um validador
-público de SPF/DKIM/DMARC ou mandando um e-mail para um serviço de
-avaliação de entregabilidade. Os três precisam passar; DKIM em especial
-costuma falhar por seletor errado.
+### B3. Conferir se o `List-Unsubscribe` sobrevive ao provedor
 
-### B5. Testar em caixa de entrada de verdade
+Os cabeçalhos da AG-115 são montados em `models/notification-templates.js`
+e entregues ao nodemailer. Falta confirmar que o Resend os repassa em vez
+de reescrevê-los com os dele.
 
-"Enviado sem erro" não é teste. Crie uma conta no **Gmail** e uma no
-**Outlook**, cadastre as duas no sistema, configure um aviso e deixe o
-disparo rodar.
+Mande um aviso de verdade para uma conta no Gmail e abra o original da
+mensagem. Você precisa ver:
 
-O que conferir em cada uma:
+- `List-Unsubscribe` apontando para
+  `/api/v1/notifications/unsubscribe/<token>` do **seu** domínio;
+- `List-Unsubscribe-Post: List-Unsubscribe=One-Click`;
+- o botão nativo **Cancelar inscrição** ao lado do remetente.
 
-- chegou na **caixa de entrada**, não em Promoções nem em Spam;
-- o remetente aparece sem aviso de "não verificado";
-- o botão nativo **Cancelar inscrição** aparece ao lado do remetente —
-  é o `List-Unsubscribe` da AG-115 funcionando, e ele vale muito para a
-  reputação: quem usa esse botão não usa o de spam;
-- o link do rodapé abre `/descadastro/<token>` e desliga o aviso.
+Se o Resend substituir o cabeçalho pelo dele, o botão continua
+funcionando, mas quem processa o descadastro passa a ser o Resend e o
+sistema não fica sabendo — a pessoa continuaria marcada como ativa na tela
+de notificações. Nesse caso me chame: dá para resolver desligando o
+gerenciamento de inscrição do lado deles, ou tratando o webhook.
 
-### B6. Comparar a cota com o volume
+### B4. Comparar a cota com o volume
+
+Confira o plano no painel, porque os números mudam. Hoje o gratuito do
+Resend é da ordem de **3.000 mensagens por mês e 100 por dia**.
+
+O teto diário é o que merece atenção, e é uma mudança de natureza, não de
+grau: ativação e recuperação são reativas e esparsas; aviso agendado sai
+em lote, concentrado no horário que os usuários escolheram. Um pico às
+08:00 pode consumir a cota do dia inteiro de uma vez.
 
 A projeção é **usuários × tipos ativos × lembretes por tipo**, por evento
-avisado. Com o padrão do catálogo (3 dias e 1 dia para tarefas; 1 dia e 2
-horas para agenda), cada tarefa com prazo gera 2 e-mails por responsável, e
-o teto por tipo é 5.
+avisado. O agrupamento ajuda bastante: tudo o que vence no mesmo lembrete
+vira uma mensagem só por usuário, não uma por item.
 
-Lembre que o envio é **agrupado por usuário**: tudo o que vence no mesmo
-lembrete vira uma mensagem só, não uma por item. Isso reduz bastante o
-número real.
+### B5. Bounce e reclamação — isto exige código
 
-### B7. Tratar bounce e reclamação
+Endereço que rejeita permanentemente precisa parar de receber, senão a
+reputação do domínio cai por causa de um único usuário.
 
-**Este item exige código, e ele ainda não existe.** Endereço que rejeita
-permanentemente precisa parar de receber, senão a reputação do domínio cai
-por causa de um único usuário.
+O Resend emite eventos de webhook para isso (`email.bounced`,
+`email.complained`), assinados. **O endpoint que os recebe ainda não
+existe.** A operação de desligar já existe, em
+`models/notification-unsubscribe.js` — falta o webhook que a chama.
 
-O caminho natural é um webhook do provedor que desligue as preferências
-daquele endereço — a mesma operação que a AG-115 já implementou em
-`models/notification-unsubscribe.js`. Quando escolher o provedor, me diga
-qual é e eu implemento o webhook.
+Quando você quiser, eu implemento: é criar a rota, validar a assinatura e
+desligar as preferências do endereço que rejeitou.
 
-### B8. Registrar o que mudou
+### B6. Registrar o que ficou decidido
 
-- Provedor de produção documentado no `README.md`.
-- Variáveis novas acrescentadas ao `.env.development.example`, **em
-  branco**, como já foi feito com as do Google.
+- Provedor documentado no `README.md`, que hoje só menciona o Mailcatcher
+  de desenvolvimento.
+- Política de privacidade: a entrada do Resend fala apenas em ativação e
+  recuperação. Com o épico, ele passa a entregar aviso agendado também.
 
 ---
 
 ## Checklist
 
+**Pré-requisito**
+
+- [ ] Épico na `main` e deploy feito na Vercel
+- [ ] `.github/workflows/notifications.yaml` na branch padrão
+- [ ] Migrations aplicadas no banco de produção
+
 **AG-112**
 
-- [ ] Segredo gerado
-- [ ] `NOTIFICATIONS_DISPATCH_SECRET` na Vercel (Production)
-- [ ] Redeploy feito depois de salvar a variável
-- [ ] `NOTIFICATIONS_DISPATCH_SECRET` nos secrets do GitHub, valor idêntico
+- [x] Segredo gerado
+- [x] `NOTIFICATIONS_DISPATCH_SECRET` na Vercel (Production)
+- [x] `NOTIFICATIONS_DISPATCH_SECRET` nos secrets do GitHub, valor idêntico
+- [ ] Redeploy feito **depois** de salvar a variável
 - [ ] Modo seco respondeu 200
 - [ ] `workflow_dispatch` executado com sucesso (só depois da AG-116)
 - [ ] Execução automática confirmada na hora seguinte
 
-**AG-116**
+**AG-116** — o Resend já é o provedor, o que dispensa escolher e
+provavelmente já resolveu SPF e DKIM
 
-- [ ] Provedor atual levantado no ambiente da Vercel
-- [ ] Provedor definido e documentado no README
-- [ ] SPF publicado (registro único, dentro do limite de 10 consultas)
-- [ ] DKIM publicado e validado
+- [x] Provedor atual levantado: Resend, já em uso para ativação e recuperação
+- [ ] Domínio aparece como _Verified_ no painel do Resend
+- [ ] `EMAIL_FROM` na Vercel usa o mesmo domínio verificado
+- [ ] `EMAIL_SMTP_PORT` é 465, coerente com `secure: true` em produção
+- [ ] SPF único no domínio, dentro do limite de 10 consultas
+- [ ] DKIM validado
 - [ ] DMARC em `p=none` com `rua` recebendo relatórios
-- [ ] Validação externa passando nos três
-- [ ] Teste real chegando na caixa de entrada do Gmail e do Outlook
+- [ ] `List-Unsubscribe` do AgrDrive chegando intacto, conferido no original da mensagem
+- [ ] Teste real na caixa de entrada do Gmail e do Outlook
 - [ ] Botão nativo de cancelar inscrição aparecendo
-- [ ] Cota comparada com a projeção de volume
-- [ ] Webhook de bounce implementado
-- [ ] Variáveis novas em `.env.development.example`
+- [ ] Cota diária comparada com o pico do horário de envio
+- [ ] Webhook de bounce implementado (falta código)
+- [ ] Provedor documentado no README
+- [ ] Política de privacidade citando o aviso agendado
 - [ ] DMARC promovido a `p=quarantine` com relatórios limpos
