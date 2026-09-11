@@ -69,8 +69,12 @@ export function describeSchedule({
     return "Você não receberá este aviso.";
   }
 
+  // Não promete "na hora". O aviso é reservado no momento em que o fato
+  // acontece, mas quem envia é o job que roda de hora em hora — então pode
+  // chegar até uma hora depois. Prometer imediato seria mentira, e mentira
+  // barata: o usuário descobre na primeira vez que usar.
   if (immediate) {
-    return "Você receberá este aviso assim que acontecer.";
+    return "Você receberá este aviso no próximo envio, até uma hora depois de acontecer.";
   }
 
   if (reminders.length === 0) {

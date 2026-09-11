@@ -53,7 +53,8 @@ const NOTIFICATION_TYPES = [
   {
     type: "TASK_ASSIGNED",
     label: "Tarefa atribuída a você",
-    description: "Avisa assim que alguém coloca você como responsável.",
+    description:
+      "Avisa quando outra pessoa coloca você como responsável por uma tarefa.",
     feature: "use:tasks",
     schedule: IMMEDIATE,
     defaultOffsets: [],

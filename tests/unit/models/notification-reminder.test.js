@@ -81,10 +81,16 @@ describe("models/notification-reminder.js", () => {
       ).toBe("Você não receberá este aviso.");
     });
 
-    test("tipo imediato não fala em antecedência", () => {
-      expect(describeSchedule({ enabled: true, immediate: true })).toBe(
-        "Você receberá este aviso assim que acontecer.",
+    // Não promete "na hora": o aviso é reservado quando o fato acontece,
+    // mas quem envia é o job de hora em hora. Prometer imediato seria
+    // mentira barata — o usuário descobre na primeira vez que usar.
+    test("tipo imediato não fala em antecedência nem promete imediatismo", () => {
+      const frase = describeSchedule({ enabled: true, immediate: true });
+
+      expect(frase).toBe(
+        "Você receberá este aviso no próximo envio, até uma hora depois de acontecer.",
       );
+      expect(frase).not.toContain("antes");
     });
 
     // Ligado e sem nenhum aviso é o estado que a API recusa; a tela precisa

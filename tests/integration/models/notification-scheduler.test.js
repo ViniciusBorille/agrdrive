@@ -56,9 +56,15 @@ async function definirPreferencia(
   }
 }
 
+// `reserveDue` só produz aviso agendado. `TASK_ASSIGNED` é reservado na
+// hora da atribuição, por `models/task.js`, e entraria nestas contagens sem
+// ter nada a ver com o que este arquivo testa.
 async function entregasDe(subjectId) {
   const results = await database.query({
-    text: "SELECT * FROM notification_deliveries WHERE subject_id = $1 ORDER BY offset_minutes DESC",
+    text: `SELECT * FROM notification_deliveries
+             WHERE subject_id = $1
+               AND type <> 'TASK_ASSIGNED'
+             ORDER BY offset_minutes DESC`,
     values: [subjectId],
   });
 

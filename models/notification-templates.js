@@ -13,8 +13,12 @@ import { humanizeOffset } from "@/models/notification-reminder.js";
 const MODULE_PATHS = {
   TASK_DUE: "/tarefas",
   VISIT_UPCOMING: "/agenda",
+  TASK_ASSIGNED: "/tarefas",
 };
 
+// `section` existe porque `TASK_DUE` e `TASK_ASSIGNED` compartilham o
+// plural "tarefas": num e-mail que traga os dois, dois blocos com o mesmo
+// título não diriam qual é qual.
 const TYPE_LABELS = {
   TASK_DUE: { singular: "tarefa", plural: "tarefas", verb: "vence" },
   VISIT_UPCOMING: {
@@ -22,7 +26,39 @@ const TYPE_LABELS = {
     plural: "compromissos",
     verb: "acontece",
   },
+  TASK_ASSIGNED: {
+    singular: "tarefa",
+    plural: "tarefas",
+    section: "tarefas atribuídas a você",
+  },
 };
+
+// Aviso sem antecedência: o fato já aconteceu quando o e-mail é composto.
+const IMMEDIATE_TYPES = new Set(["TASK_ASSIGNED"]);
+
+function isImmediate(item) {
+  return IMMEDIATE_TYPES.has(item.type);
+}
+
+function sectionTitle(type) {
+  const labels = TYPE_LABELS[type];
+
+  return labels.section ?? labels.plural;
+}
+
+// O que vai depois do título do item. Para aviso agendado, a data do
+// evento e quanto falta; para aviso imediato, o prazo — que é a única
+// informação útil de uma tarefa que você acabou de receber, e pode não
+// existir.
+function describeItem(item, timezone) {
+  if (isImmediate(item)) {
+    return item.eventAt
+      ? `prazo ${formatEventAt(item.eventAt, timezone)}`
+      : "sem prazo definido";
+  }
+
+  return `${formatEventAt(item.eventAt, timezone)} — em ${humanizeOffset(item.offsetMinutes)}`;
+}
 
 // A data precisa aparecer no fuso de quem lê, senão o e-mail contradiz o
 // que a pessoa vê na tela.
@@ -46,6 +82,15 @@ export function formatEventAt(eventAt, timezone) {
 // dias"); misturando tipos, só o total honesto.
 function buildSubject(items) {
   const sameType = items.every((item) => item.type === items[0].type);
+
+  // Aviso imediato não tem antecedência: "vence em 0 minutos" não quer
+  // dizer nada.
+  if (sameType && isImmediate(items[0])) {
+    return items.length === 1
+      ? "Você recebeu uma nova tarefa"
+      : `Você recebeu ${items.length} novas tarefas`;
+  }
+
   const sameOffset = items.every(
     (item) => item.offsetMinutes === items[0].offsetMinutes,
   );
@@ -85,13 +130,10 @@ function buildText(user, items, settingsUrl, unsubscribeUrl) {
   const lines = [`${user.username}, você tem avisos no AgrDrive:`, ""];
 
   for (const [type, groupItems] of groupByType(items)) {
-    const labels = TYPE_LABELS[type];
-    lines.push(`${labels.plural.toUpperCase()}:`);
+    lines.push(`${sectionTitle(type).toUpperCase()}:`);
 
     for (const item of groupItems) {
-      lines.push(
-        `- ${item.title} — ${formatEventAt(item.eventAt, user.timezone)} (em ${humanizeOffset(item.offsetMinutes)})`,
-      );
+      lines.push(`- ${item.title} — ${describeItem(item, user.timezone)}`);
       lines.push(`  ${itemUrl(item)}`);
     }
 
@@ -128,7 +170,6 @@ function buildHtml(user, items, settingsUrl, unsubscribeUrl) {
   const sections = [];
 
   for (const [type, groupItems] of groupByType(items)) {
-    const labels = TYPE_LABELS[type];
     const rows = groupItems
       .map(
         (item) => `
@@ -136,7 +177,7 @@ function buildHtml(user, items, settingsUrl, unsubscribeUrl) {
             <td style="padding:10px 0;border-bottom:1px solid #eef1ef;">
               <a href="${itemUrl(item)}" style="color:#1c6856;font-weight:600;text-decoration:none;">${escapeHtml(item.title)}</a>
               <div style="color:#5a635e;font-size:13px;margin-top:3px;">
-                ${escapeHtml(formatEventAt(item.eventAt, user.timezone))} — em ${escapeHtml(humanizeOffset(item.offsetMinutes))}
+                ${escapeHtml(describeItem(item, user.timezone))}
               </div>
             </td>
           </tr>`,
@@ -145,7 +186,7 @@ function buildHtml(user, items, settingsUrl, unsubscribeUrl) {
 
     sections.push(`
       <p style="color:#8a938e;font-size:12px;letter-spacing:.6px;text-transform:uppercase;margin:22px 0 0;">
-        ${escapeHtml(labels.plural)}
+        ${escapeHtml(sectionTitle(type))}
       </p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>`);
   }

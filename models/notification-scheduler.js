@@ -173,6 +173,58 @@ async function reserveDue({ now = new Date(), dryRun = false } = {}) {
   };
 }
 
+// `TASK_ASSIGNED` não tem data futura para apurar: o fato já aconteceu. Em
+// vez de varrer o banco de hora em hora atrás de atribuições novas — o que
+// exigiria guardar "até onde já olhei" —, quem atribui reserva na hora.
+//
+// Quem **envia** continua sendo o job de hora em hora. Isso mantém o e-mail
+// fora da requisição que salva a tarefa: se o SMTP estiver lento ou fora do
+// ar, quem está cadastrando não espera nem vê erro. O preço é que o aviso
+// pode chegar até uma hora depois, e por isso a tela não promete
+// "imediatamente" — veja `describeSchedule`.
+//
+// `offset_minutes = 0` entra na chave única junto com (user_id, type,
+// subject_id): atribuir a mesma pessoa à mesma tarefa de novo não gera
+// segundo e-mail.
+async function reserveTaskAssigned({ taskId, userIds, actorId = null }) {
+  if (!userIds || userIds.length === 0) {
+    return [];
+  }
+
+  const results = await database.query({
+    text: `
+      INSERT INTO notification_deliveries
+        (user_id, type, subject_id, offset_minutes, scheduled_for, status)
+      SELECT
+        u.id,
+        'TASK_ASSIGNED'::notification_type,
+        $1,
+        0,
+        timezone('utc', now()),
+        'PENDING'::notification_delivery_status
+      FROM
+        users u
+      JOIN
+        notification_preferences p
+          ON p.user_id = u.id
+          AND p.type = 'TASK_ASSIGNED'
+          AND p.enabled
+      WHERE
+        u.id = ANY($2::uuid[])
+        -- Quem se atribui não precisa ser avisado do que acabou de fazer.
+        AND ($3::uuid IS NULL OR u.id <> $3::uuid)
+        AND 'use:tasks' = ANY(u.features)
+      ON CONFLICT
+        (user_id, type, subject_id, offset_minutes)
+      DO NOTHING
+      RETURNING *
+    ;`,
+    values: [taskId, userIds, actorId],
+  });
+
+  return results.rows;
+}
+
 // Uma reserva pode envelhecer entre a apuração e o envio: a tarefa é
 // concluída, a visita é apagada. Marcar como SKIPPED evita mandar aviso de
 // algo que deixou de existir, e deixa registro de que a decisão foi
@@ -187,7 +239,7 @@ async function skipObsolete() {
         d.status = 'PENDING'
         AND (
           (
-            d.type = 'TASK_DUE'
+            d.type IN ('TASK_DUE', 'TASK_ASSIGNED')
             AND NOT EXISTS (
               SELECT 1 FROM tasks t
               WHERE t.id = d.subject_id
@@ -212,6 +264,7 @@ async function skipObsolete() {
 
 const notificationScheduler = {
   reserveDue,
+  reserveTaskAssigned,
   skipObsolete,
   TOLERANCE_IN_MINUTES,
   BACKFILL_LIMIT_IN_MINUTES,

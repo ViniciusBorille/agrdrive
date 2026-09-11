@@ -42,7 +42,7 @@ async function findPending({ limit = DEFAULT_BATCH_SIZE } = {}) {
         users u ON u.id = d.user_id
       LEFT JOIN
         tasks t
-          ON d.type = 'TASK_DUE'
+          ON d.type IN ('TASK_DUE', 'TASK_ASSIGNED')
           AND t.id = d.subject_id
           AND t.deleted_at IS NULL
           AND t.status NOT IN ('COMPLETED', 'CANCELLED')
