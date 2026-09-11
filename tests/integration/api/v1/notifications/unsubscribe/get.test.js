@@ -52,9 +52,11 @@ describe("GET /api/v1/notifications/unsubscribe/[token]", () => {
 
     await fetch(`${ENDPOINT}/${token}`);
 
+    // Continua ligado: abrir o link não é o mesmo que clicar no botão.
     expect(
-      await notificationPreference.findOneByUserIdAndType(user.id, "TASK_DUE"),
-    ).toBeNull();
+      (await notificationPreference.findOneByUserIdAndType(user.id, "TASK_DUE"))
+        .enabled,
+    ).toBe(true);
 
     const segunda = await fetch(`${ENDPOINT}/${token}`);
     expect(segunda.status).toBe(200);

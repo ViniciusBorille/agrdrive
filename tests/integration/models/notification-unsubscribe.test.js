@@ -137,7 +137,11 @@ describe("models/notification-unsubscribe.js", () => {
 
       expect(disabled).toEqual(["TASK_DUE"]);
       expect((await preferenciaDe(user.id, "TASK_DUE")).enabled).toBe(false);
-      expect(await preferenciaDe(user.id, "VISIT_UPCOMING")).toBeNull();
+      // Os outros tipos continuam ligados: descadastro por tipo não pode
+      // virar descadastro total por acidente.
+      expect((await preferenciaDe(user.id, "VISIT_UPCOMING")).enabled).toBe(
+        true,
+      );
     });
 
     test("sem tipo, desliga o catálogo inteiro", async () => {
@@ -243,11 +247,18 @@ describe("models/notification-unsubscribe.js", () => {
       expect(depois.pending).toHaveLength(0);
     });
 
-    // Quem nunca abriu a tela de configuração não tem linha em
-    // `notification_preferences`: vale o padrão do catálogo. Sem o INSERT,
-    // o descadastro dessas pessoas não desligaria nada.
-    test("desliga mesmo quem nunca configurou nada", async () => {
+    // Hoje todo usuário nasce com as preferências gravadas, mas o
+    // descadastro não pode depender disso: uma linha apagada à mão, ou um
+    // tipo novo acrescentado ao catálogo depois do cadastro, deixariam a
+    // pessoa sem linha. O INSERT do `disable` é o que garante que desligar
+    // funciona mesmo assim.
+    test("desliga mesmo quem não tem preferência gravada", async () => {
       const user = await criarUsuario();
+
+      await database.query({
+        text: "DELETE FROM notification_preferences WHERE user_id = $1",
+        values: [user.id],
+      });
       expect(await preferenciaDe(user.id, "TASK_DUE")).toBeNull();
 
       const created = await notificationUnsubscribe.create(user.id, []);

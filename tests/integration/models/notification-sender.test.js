@@ -10,6 +10,7 @@ import orchestrator from "@/tests/orchestrator.js";
 import notificationScheduler from "@/models/notification-scheduler.js";
 import notificationSender from "@/models/notification-sender.js";
 import notificationUnsubscribe from "@/models/notification-unsubscribe.js";
+import notificationPreference from "@/models/notification-preference.js";
 import { ServiceError } from "@/infra/errors.js";
 
 beforeAll(async () => {
@@ -31,22 +32,18 @@ beforeEach(async () => {
 const PRAZO = "2026-09-29T23:59:59.999-03:00";
 const DEPOIS_DO_GATILHO = new Date("2026-09-28T07:30:00-03:00");
 
+// `replace` em vez de INSERT cru: desde que o usuário nasce com as
+// preferências padrão gravadas, um INSERT aqui esbarraria na chave única
+// (user_id, type). O `replace` é a mesma operação que a tela faz ao salvar.
 async function criarUsuarioComPreferencia({ reminders = [1440] } = {}) {
   const created = await orchestrator.createUser();
   const activated = await orchestrator.activateUser(created);
 
-  const preference = await database.query({
-    text: `INSERT INTO notification_preferences (user_id, type, enabled, send_at_time)
-           VALUES ($1, 'TASK_DUE', true, '07:00') RETURNING id`,
-    values: [activated.id],
+  await notificationPreference.replace(activated.id, "TASK_DUE", {
+    enabled: true,
+    send_at_time: "07:00",
+    reminders,
   });
-
-  for (const offset of reminders) {
-    await database.query({
-      text: "INSERT INTO notification_reminders (preference_id, offset_minutes) VALUES ($1, $2)",
-      values: [preference.rows[0].id, offset],
-    });
-  }
 
   return activated;
 }

@@ -1,5 +1,10 @@
 import database from "@/infra/database.js";
-import { findNotificationType } from "@/models/notification-catalog.js";
+import {
+  findNotificationType,
+  listNotificationTypes,
+} from "@/models/notification-catalog.js";
+
+const DEFAULT_SEND_AT_TIME = "08:00";
 
 // `send_at_time` é `time` no banco e volta como "08:00:00". A API fala em
 // "HH:MM" — converter aqui evita que cada consumidor tenha a própria
@@ -117,9 +122,57 @@ function defaultsFor(type) {
   return {
     type,
     enabled: true,
-    send_at_time: "08:00",
+    send_at_time: DEFAULT_SEND_AT_TIME,
     reminders: definition ? definition.defaultOffsets : [],
   };
+}
+
+// Usuário novo precisa nascer com as preferências **gravadas**, não apenas
+// com um padrão teórico. O agendador faz JOIN com `notification_preferences`
+// — quem não tem linha nunca é apurado, e nenhum e-mail sai. Sem isto a
+// tela mostra os padrões como se estivessem valendo, o que é pior que não
+// mostrar nada: ninguém vai abrir a configuração para clicar em Salvar num
+// formulário que já parece certo.
+//
+// Sem filtro por feature de propósito. A feature do módulo é conferida pelo
+// agendador na hora da apuração; gravar a linha aqui faz com que conceder
+// `use:agenda` meses depois já comece a avisar, sem visita à tela.
+//
+// `ON CONFLICT DO NOTHING` em vez de sobrescrever: quem já configurou tem
+// preferência sobre o padrão, sempre.
+async function seedDefaultsFor(userId) {
+  await database.transaction(async (client) => {
+    for (const definition of listNotificationTypes()) {
+      const created = await client.query({
+        text: `
+          INSERT INTO
+            notification_preferences (user_id, type, enabled, send_at_time)
+          VALUES
+            ($1, $2, true, $3)
+          ON CONFLICT
+            (user_id, type)
+          DO NOTHING
+          RETURNING
+            id
+        ;`,
+        values: [userId, definition.type, DEFAULT_SEND_AT_TIME],
+      });
+
+      // Já existia: não encosta nos lembretes de quem configurou.
+      if (created.rowCount === 0 || definition.defaultOffsets.length === 0) {
+        continue;
+      }
+
+      const placeholders = definition.defaultOffsets
+        .map((_, index) => `($1, $${index + 2})`)
+        .join(", ");
+
+      await client.query({
+        text: `INSERT INTO notification_reminders (preference_id, offset_minutes) VALUES ${placeholders}`,
+        values: [created.rows[0].id, ...definition.defaultOffsets],
+      });
+    }
+  });
 }
 
 const notificationPreference = {
@@ -127,6 +180,8 @@ const notificationPreference = {
   findOneByUserIdAndType,
   replace,
   defaultsFor,
+  seedDefaultsFor,
+  DEFAULT_SEND_AT_TIME,
 };
 
 export default notificationPreference;

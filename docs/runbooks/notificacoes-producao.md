@@ -188,7 +188,7 @@ a forma é esta:
 registro `v=spf1`, **edite o existente**; dois registros SPF invalidam um
 ao outro.
 
-```
+```text
 Tipo: TXT   Nome: @   Valor: v=spf1 include:<host-do-provedor> ~all
 ```
 
@@ -199,14 +199,14 @@ Tipo: TXT   Nome: @   Valor: v=spf1 include:<host-do-provedor> ~all
 **DKIM** — assina as mensagens. Quase sempre são CNAMEs que o provedor
 entrega prontos:
 
-```
+```text
 Tipo: CNAME   Nome: <seletor>._domainkey   Valor: <fornecido pelo provedor>
 ```
 
 **DMARC** — diz ao destinatário o que fazer quando SPF e DKIM falham.
 Comece observando, sem bloquear nada:
 
-```
+```text
 Tipo: TXT   Nome: _dmarc   Valor: v=DMARC1; p=none; rua=mailto:dmarc@agrdrive.com.br; fo=1
 ```
 

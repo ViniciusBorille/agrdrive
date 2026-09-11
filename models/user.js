@@ -1,5 +1,6 @@
 import database from "@/infra/database.js";
 import password from "@/models/password.js";
+import notificationPreference from "@/models/notification-preference.js";
 import { ValidationError, NotFoundError } from "@/infra/errors.js";
 
 async function findOneByUsername(username) {
@@ -102,6 +103,12 @@ async function create(userInputValues) {
   injectDefaultFeaturesInObject(userInputValues);
 
   const newUser = await runInsertQuery(userInputValues);
+
+  // Quem nasce sem preferência gravada nunca é apurado pelo agendador, que
+  // faz JOIN com `notification_preferences`. Fica aqui, e não na ativação,
+  // porque a linha não depende de o usuário ter entrado alguma vez.
+  await notificationPreference.seedDefaultsFor(newUser.id);
+
   return newUser;
 
   async function runInsertQuery(userInputValues) {

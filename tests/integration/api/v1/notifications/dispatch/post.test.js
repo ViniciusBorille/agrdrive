@@ -1,5 +1,6 @@
 import database from "@/infra/database.js";
 import orchestrator from "@/tests/orchestrator.js";
+import notificationPreference from "@/models/notification-preference.js";
 
 const ENDPOINT = "http:localhost:3000/api/v1/notifications/dispatch";
 const SECRET = process.env.NOTIFICATIONS_DISPATCH_SECRET;
@@ -30,14 +31,12 @@ async function tarefaComAvisoVencido() {
   const created = await orchestrator.createUser();
   const user = await orchestrator.activateUser(created);
 
-  const preference = await database.query({
-    text: `INSERT INTO notification_preferences (user_id, type, enabled, send_at_time)
-           VALUES ($1, 'TASK_DUE', true, '00:00') RETURNING id`,
-    values: [user.id],
-  });
-  await database.query({
-    text: "INSERT INTO notification_reminders (preference_id, offset_minutes) VALUES ($1, 1440)",
-    values: [preference.rows[0].id],
+  // O usuário já nasce com as preferências padrão; aqui só ajustamos a
+  // hora de envio para que o aviso caia dentro da janela do teste.
+  await notificationPreference.replace(user.id, "TASK_DUE", {
+    enabled: true,
+    send_at_time: "00:00",
+    reminders: [1440],
   });
 
   await orchestrator.createTask({
