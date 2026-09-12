@@ -403,9 +403,13 @@ export default function NotificacoesPage() {
         <title>Notificações · AgrDrive</title>
       </Head>
 
+      {/* O teto de largura não é enfeite: sem ele, num monitor largo cada
+          cartão viraria uma faixa de mil pixels para abrigar um campo de
+          número e um select de 130. Em 1180 cabem três colunas de ~380,
+          que é o tamanho em que o conteúdo do cartão respira. */}
       <div
         style={{
-          maxWidth: 640,
+          maxWidth: 1180,
           display: "flex",
           flexDirection: "column",
           gap: 14,
@@ -446,15 +450,43 @@ export default function NotificacoesPage() {
           </div>
         )}
 
-        {/* A tela não conhece a lista de tipos: ela desenha o que a API
-            devolver. Acrescentar um tipo no catálogo não exige mexer aqui. */}
-        {data?.map((preference) => (
-          <TypeCard
-            key={preference.type}
-            preference={preference}
-            onSaved={mutate}
-          />
-        ))}
+        {/* Lado a lado, para a configuração inteira caber numa tela só —
+            empilhados, comparar "quando chega o aviso de tarefa" com "quando
+            chega o da agenda" exigia rolar.
+
+            `auto-fit` com `minmax` em vez de um número fixo de colunas: a
+            quantidade de cartões vem da API, e o mínimo de 320px é o que o
+            conteúdo do cartão precisa (quantidade + unidade + remover, mais
+            o respiro das bordas). Abaixo disso a grade cai sozinha para uma
+            coluna, que é o comportamento certo no celular.
+
+            O `min(320px, 100%)` existe porque num celular estreito a área
+            útil fica menor que 320: sem ele a coluna continuaria com 320 e
+            o cartão vazaria para fora da própria grade.
+
+            `alignItems: start` porque os cartões têm alturas muito
+            diferentes — o de tarefa atribuída não tem lembretes para
+            configurar. Esticados, ele viraria um retângulo com um vazio
+            embaixo do botão. */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+            gap: 14,
+            alignItems: "start",
+          }}
+        >
+          {/* A tela não conhece a lista de tipos: ela desenha o que a API
+              devolver. Acrescentar um tipo no catálogo não exige mexer aqui. */}
+          {data?.map((preference) => (
+            <TypeCard
+              key={preference.type}
+              preference={preference}
+              onSaved={mutate}
+            />
+          ))}
+        </div>
       </div>
     </Shell>
   );
