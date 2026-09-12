@@ -111,3 +111,28 @@ describe("infra/email.js", () => {
     });
   });
 });
+
+describe("remetente padrão", () => {
+  // Estava repetido como literal em cada model que mandava e-mail, o que
+  // garantia que um dia divergiriam. Agora vive num lugar só, e é aqui que
+  // se verifica que o endereço certo chega ao transporte.
+  test("preenche o remetente institucional quando o chamador omite", async () => {
+    await email.send({
+      to: "fulano@agrdrive.com.br",
+      subject: "Assunto",
+      text: "Corpo",
+    });
+
+    expect(sendMail.mock.calls[0][0].from).toBe(
+      "AgrDrive <contato@agrdrive.com.br>",
+    );
+  });
+
+  test("um remetente explícito continua vencendo o padrão", async () => {
+    await email.send({ ...mailOptions, from: "Outro <outro@agrdrive.com.br>" });
+
+    expect(sendMail.mock.calls[0][0].from).toBe(
+      "Outro <outro@agrdrive.com.br>",
+    );
+  });
+});

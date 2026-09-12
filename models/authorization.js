@@ -20,6 +20,9 @@ const availableFeatures = [
   "create:recovery_token",
   "read:recovery_token",
 
+  // UNSUBSCRIBE_TOKEN
+  "read:unsubscribe_token",
+
   // MODULES
   "use:tasks",
   "read:indicators",

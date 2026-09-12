@@ -6,6 +6,16 @@ jest.mock("../../../infra/database.js", () => ({
   default: { query: jest.fn() },
 }));
 
+// Semear as preferências de notificação é efeito do cadastro, não regra
+// do `user`: aqui só interessa que o cadastro as peça. O comportamento
+// delas está coberto em tests/integration/models/notification-preference.
+jest.mock("../../../models/notification-preference.js", () => ({
+  __esModule: true,
+  default: { seedDefaultsFor: jest.fn() },
+}));
+
+import notificationPreference from "@/models/notification-preference.js";
+
 import user from "@/models/user.js";
 import { ValidationError, NotFoundError } from "@/infra/errors.js";
 
@@ -186,6 +196,25 @@ describe("models/user.js", () => {
           password: "senhaCorreta",
         }),
       ).resolves.toEqual({ id: "user-1" });
+    });
+
+    // Sem esta chamada o usuário nasce sem nenhuma linha em
+    // `notification_preferences`, e o agendador — que faz JOIN com ela —
+    // nunca o apura. Ele ficaria mudo para sempre, com a tela mostrando
+    // os padrões como se estivessem valendo.
+    test("semeia as preferências de notificação do novo usuário", async () => {
+      notificationPreference.seedDefaultsFor.mockClear();
+      mockCreateHappyPath();
+
+      await user.create({
+        username: "Fulano",
+        email: "fulano@agrdrive.com.br",
+        password: "senhaCorreta",
+      });
+
+      expect(notificationPreference.seedDefaultsFor).toHaveBeenCalledWith(
+        "user-1",
+      );
     });
   });
 

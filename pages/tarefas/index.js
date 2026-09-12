@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
 import useSWR, { mutate } from "swr";
-import Shell, { fmtDue, STATUS_META, PRIORITY_META } from "@/components/Shell";
+import Shell, {
+  dueDateInputToISO,
+  fmtDue,
+  isoToDueDateInput,
+  PRIORITY_META,
+  STATUS_META,
+} from "@/components/Shell";
 import { allowedTaskStatusTransitions } from "@/models/task-status.js";
 
 const fetcher = (url) =>
@@ -130,7 +136,7 @@ function EditTaskModal({ task, isCreator, onClose }) {
     description: task.description || "",
     status: task.status,
     priority: task.priority,
-    due_date: task.due_date ? task.due_date.split("T")[0] : "",
+    due_date: isoToDueDateInput(task.due_date),
     assignees: task.assignees?.map((a) => a.id) || [],
   });
   const [saving, setSaving] = useState(false);
@@ -164,7 +170,7 @@ function EditTaskModal({ task, isCreator, onClose }) {
         description: form.description.trim() || null,
         status: form.status,
         priority: form.priority,
-        due_date: form.due_date ? form.due_date + "T00:00:00.000Z" : null,
+        due_date: dueDateInputToISO(form.due_date),
         ...(isCreator && { assigned_to: form.assignees }),
       };
       const res = await fetch(`/api/v1/tasks/${task.id}`, {

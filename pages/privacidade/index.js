@@ -134,16 +134,17 @@ const INDEX = [
   ["finalidades", "3. Para que usamos os dados"],
   ["bases-legais", "4. Bases legais (LGPD)"],
   ["google", "5. Integração com o Google Calendar"],
-  ["cookies", "6. Cookies"],
-  ["compartilhamento", "7. Com quem compartilhamos"],
-  ["internacional", "8. Transferência internacional"],
-  ["retencao", "9. Por quanto tempo guardamos"],
-  ["seguranca", "10. Segurança"],
-  ["direitos", "11. Seus direitos"],
-  ["menores", "12. Menores de idade"],
-  ["incidentes", "13. Incidentes de segurança"],
-  ["alteracoes", "14. Alterações desta política"],
-  ["contato", "15. Contato"],
+  ["notificacoes", "6. Notificações por e-mail"],
+  ["cookies", "7. Cookies"],
+  ["compartilhamento", "8. Com quem compartilhamos"],
+  ["internacional", "9. Transferência internacional"],
+  ["retencao", "10. Por quanto tempo guardamos"],
+  ["seguranca", "11. Segurança"],
+  ["direitos", "12. Seus direitos"],
+  ["menores", "13. Menores de idade"],
+  ["incidentes", "14. Incidentes de segurança"],
+  ["alteracoes", "15. Alterações desta política"],
+  ["contato", "16. Contato"],
 ];
 
 export default function Privacidade() {
@@ -692,7 +693,91 @@ export default function Privacidade() {
               </P>
             </Section>
 
-            <Section id="cookies" number="06" title="Cookies">
+            <Section
+              id="notificacoes"
+              number="06"
+              title="Notificações por e-mail"
+            >
+              <P>
+                O AgrDrive envia dois tipos de e-mail, e eles não seguem as
+                mesmas regras.
+              </P>
+
+              <P>
+                <Strong>E-mails transacionais</Strong> — ativação de conta e
+                recuperação de senha — respondem a um pedido seu: você clicou, o
+                sistema respondeu. Eles fazem parte da execução do contrato e{" "}
+                <Strong>não podem ser desativados</Strong>, porque sem eles não
+                há como entrar na sua própria conta.
+              </P>
+
+              <P>
+                <Strong>Avisos agendados</Strong> — prazo de tarefa se
+                aproximando, compromisso da agenda se aproximando, tarefa
+                atribuída a você — chegam sem você ter feito nada naquele
+                momento. Por isso eles são configuráveis e podem ser desligados
+                a qualquer tempo.
+              </P>
+
+              <DataTable
+                rows={[
+                  {
+                    label: "Dados usados",
+                    value:
+                      "Seu nome de usuário, o e-mail do cadastro, o fuso horário da sua conta e os dados do item avisado (título e data da tarefa ou do compromisso).",
+                  },
+                  {
+                    label: "Finalidade",
+                    value:
+                      "Avisar você com antecedência sobre prazos e compromissos que você mesmo cadastrou ou que foram atribuídos a você no sistema.",
+                  },
+                  {
+                    label: "Quem escolhe",
+                    value:
+                      "Você. Em Configurações > Notificações dá para ligar e desligar cada tipo, escolher quantos avisos receber, com quanta antecedência e a que horas.",
+                  },
+                  {
+                    label: "Registro de envio",
+                    value:
+                      "Guardamos o registro de cada aviso enviado (tipo, item, data e resultado) para não mandar o mesmo aviso duas vezes e para investigar falhas de entrega.",
+                  },
+                  {
+                    label: "Terceiros",
+                    value:
+                      "O conteúdo do aviso trafega pelo provedor de envio de e-mail contratado. Veja a seção 8.",
+                  },
+                ]}
+              />
+
+              <Callout title="Como parar de receber">
+                <P>
+                  Todo aviso agendado traz, no rodapé, um{" "}
+                  <Strong>link de descadastro que funciona sem login</Strong> —
+                  você não precisa lembrar a senha para parar de receber. O link
+                  permite desligar só aquele tipo de aviso ou todos de uma vez,
+                  e pede confirmação antes de aplicar.
+                </P>
+                <P>
+                  Nossos e-mails também trazem o cabeçalho{" "}
+                  <Strong>List-Unsubscribe</Strong>, que faz o seu provedor
+                  (Gmail, Outlook e outros) exibir o botão nativo de cancelar
+                  inscrição ao lado do remetente.
+                </P>
+                <P>
+                  Desligar avisos <Strong>não</Strong> afeta os e-mails
+                  transacionais: você continua conseguindo ativar a conta e
+                  recuperar a senha.
+                </P>
+              </Callout>
+
+              <P>
+                Desligar um aviso guarda a sua configuração em vez de apagá-la:
+                se você religar depois, as antecedências que tinha escolhido
+                voltam como estavam.
+              </P>
+            </Section>
+
+            <Section id="cookies" number="07" title="Cookies">
               <P>
                 O AgrDrive usa apenas{" "}
                 <Strong>cookies estritamente necessários</Strong>. Não há
@@ -737,7 +822,7 @@ export default function Privacidade() {
 
             <Section
               id="compartilhamento"
-              number="07"
+              number="08"
               title="Com quem compartilhamos"
             >
               <P>
@@ -761,7 +846,7 @@ export default function Privacidade() {
                   {
                     label: "Resend",
                     value:
-                      "Entrega das mensagens de ativação de conta e recuperação de senha. Recebe o seu endereço de e-mail.",
+                      "Entrega das mensagens do sistema: ativação de conta, recuperação de senha e os avisos agendados descritos na seção 6. Recebe o seu endereço de e-mail e o conteúdo da mensagem, que inclui o título e a data dos itens avisados.",
                   },
                   {
                     label: "Google LLC",
@@ -779,7 +864,7 @@ export default function Privacidade() {
 
             <Section
               id="internacional"
-              number="08"
+              number="09"
               title="Transferência internacional"
             >
               <P>
@@ -794,7 +879,7 @@ export default function Privacidade() {
 
             <Section
               id="retencao"
-              number="09"
+              number="10"
               title="Por quanto tempo guardamos"
             >
               <DataTable
@@ -837,7 +922,7 @@ export default function Privacidade() {
               </P>
             </Section>
 
-            <Section id="seguranca" number="10" title="Segurança">
+            <Section id="seguranca" number="11" title="Segurança">
               <P>
                 Adotamos medidas técnicas compatíveis com o art. 46 da LGPD:
               </P>
@@ -879,7 +964,7 @@ export default function Privacidade() {
               </P>
             </Section>
 
-            <Section id="direitos" number="11" title="Seus direitos">
+            <Section id="direitos" number="12" title="Seus direitos">
               <P>
                 O art. 18 da LGPD garante a você, a qualquer momento e sem
                 custo:
@@ -937,7 +1022,7 @@ export default function Privacidade() {
               </P>
             </Section>
 
-            <Section id="menores" number="12" title="Menores de idade">
+            <Section id="menores" number="13" title="Menores de idade">
               <P>
                 O AgrDrive destina-se a profissionais do setor agrícola e não é
                 dirigido a menores de 18 anos. Não coletamos intencionalmente
@@ -950,7 +1035,7 @@ export default function Privacidade() {
 
             <Section
               id="incidentes"
-              number="13"
+              number="14"
               title="Incidentes de segurança"
             >
               <P>
@@ -964,7 +1049,7 @@ export default function Privacidade() {
 
             <Section
               id="alteracoes"
-              number="14"
+              number="15"
               title="Alterações desta política"
             >
               <P>
@@ -978,7 +1063,7 @@ export default function Privacidade() {
               </P>
             </Section>
 
-            <Section id="contato" number="15" title="Contato">
+            <Section id="contato" number="16" title="Contato">
               <P>
                 Dúvidas sobre privacidade, pedidos de titular ou comunicação de
                 problemas de segurança:

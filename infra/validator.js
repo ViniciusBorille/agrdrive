@@ -1,12 +1,25 @@
 import { z } from "zod";
 import { ValidationError } from "@/infra/errors.js";
 
+// O zod monta a mensagem de `unrecognized_keys` internamente e ignora o
+// texto passado para `.strict()`, então esse caso chegava ao usuário em
+// inglês ("Unrecognized key: ...") em todos os endpoints. Traduzir aqui
+// conserta os dez de uma vez, em vez de cada rota inventar a sua.
+function messageFor(issue) {
+  if (issue.code === "unrecognized_keys") {
+    const keys = (issue.keys ?? []).join(", ");
+    return `Campos não permitidos foram enviados na requisição: ${keys}.`;
+  }
+
+  return issue.message;
+}
+
 function validate(schema, data) {
   const parsed = schema.safeParse(data);
 
   if (!parsed.success) {
     throw new ValidationError({
-      message: parsed.error.issues[0].message,
+      message: messageFor(parsed.error.issues[0]),
       action: "Verifique os dados enviados e tente novamente.",
     });
   }

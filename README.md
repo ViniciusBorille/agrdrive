@@ -7,7 +7,7 @@ Sistema de gerenciamento de usuários e autenticação para a plataforma AgrDriv
 - **Frontend/Backend:** [Next.js](https://nextjs.org/) 16 + React 19
 - **Banco de dados:** PostgreSQL 16 (via [node-postgres](https://node-postgres.com/))
 - **Autenticação:** Sessões por cookie com tokens UUID
-- **Email:** Nodemailer + Mailcatcher (desenvolvimento)
+- **Email:** Nodemailer sobre SMTP — [Resend](https://resend.com/) em produção, [Mailcatcher](https://mailcatcher.me/) em desenvolvimento
 - **Testes:** Jest
 - **Infraestrutura local:** Docker Compose
 

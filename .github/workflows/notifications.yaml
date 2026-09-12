@@ -1,0 +1,83 @@
+name: Disparo de notificações
+
+# Acorda a aplicação de hora em hora para apurar os avisos devidos e
+# enviá-los. O agendamento vive aqui, e não no Vercel Cron, porque o
+# projeto está no plano gratuito da Vercel, onde o cron dispara uma vez por
+# dia — com `send_at_time` e fuso por usuário, "às 08:00" seria mentira para
+# quase todo mundo. Decisão registrada na AG-112.
+#
+# De hora em hora, e não mais que isso, por causa do banco e não do
+# agendador: o Neon escala para zero quando ninguém acessa, e um job de 15
+# em 15 minutos manteria o compute acordado o tempo todo, consumindo as
+# horas do plano Free. É também a menor antecedência que o catálogo oferece
+# (`minOffsetMinutes: 60`), então o que a tela promete é o que o job
+# consegue cumprir.
+#
+# ⚠️ O GitHub desativa workflows agendados em repositórios sem atividade por
+# 60 dias. O cron para sem erro e sem aviso — num sistema de notificação
+# esse é o pior modo de falha, porque ninguém reclama de e-mail que não
+# chegou. Se o repositório for ficar parado, confira este workflow ou use o
+# `workflow_dispatch` para reativá-lo.
+#
+# Secrets necessários (Settings > Secrets and variables > Actions):
+#
+#   NOTIFICATIONS_DISPATCH_SECRET   o mesmo valor da variável de ambiente de
+#                                   mesmo nome na Vercel. Sem ele
+#                                   configurado dos dois lados, o endpoint
+#                                   responde 401.
+#
+# Variable opcional (não secret):
+#
+#   NOTIFICATIONS_DISPATCH_URL      para apontar o disparo a um preview em
+#                                   vez da produção.
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+# Este workflow não toca no repositório.
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Apurar e enviar os avisos devidos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Disparar
+        env:
+          URL: ${{ vars.NOTIFICATIONS_DISPATCH_URL || 'https://agrdrive.com.br/api/v1/notifications/dispatch' }}
+          SECRET: ${{ secrets.NOTIFICATIONS_DISPATCH_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "${SECRET:-}" || { echo "::error::secret NOTIFICATIONS_DISPATCH_SECRET não configurado"; exit 1; }
+
+          corpo=$(mktemp)
+
+          # O tempo limite acompanha o da função serverless: esperar mais que
+          # ela não traria resposta, só prenderia o runner.
+          status=$(curl -sS -X POST "$URL" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 120 \
+            -o "$corpo" -w "%{http_code}")
+
+          echo "HTTP $status"
+          cat "$corpo"
+          echo
+
+          test "$status" = "200" || { echo "::error::o disparo respondeu $status"; exit 1; }
+
+          # O endpoint responde 200 mesmo com entregas falhas — o disparo
+          # funcionou, foram as entregas que não. Transformar isso em falha
+          # do workflow é o que faz a notificação chegar a uma pessoa, já
+          # que uma entrega que esgotou as tentativas não será retentada.
+          falhas=$(jq -r '.failed // 0' < "$corpo")
+
+          if [ "$falhas" -gt 0 ]; then
+            echo "::error::$falhas entrega(s) esgotaram as tentativas e não chegaram ao destinatário"
+            exit 1
+          fi
+
+          echo "🟢 disparo concluído sem entregas perdidas"

@@ -102,7 +102,12 @@ async function patchHandler(request, response) {
     });
   }
 
-  const updatedTask = await task.update(taskId, taskInputValues);
+  // Quem está atribuindo não recebe aviso de atribuição: o `actorId` é o
+  // que permite ao model distinguir "alguém te colocou" de "você se
+  // colocou".
+  const updatedTask = await task.update(taskId, taskInputValues, {
+    actorId: userTryingToPatch.id,
+  });
   return response.status(200).json(updatedTask);
 }
 

@@ -1,4 +1,6 @@
 import database from "@/infra/database.js";
+import logger from "@/infra/logger.js";
+import notificationScheduler from "@/models/notification-scheduler.js";
 import { NotFoundError, UnprocessableEntityError } from "@/infra/errors.js";
 import {
   CLOSED_TASK_STATUSES,
@@ -58,6 +60,13 @@ async function create(tasksInputValues) {
   });
 
   const assignees = await runSelectAssigneesQuery(newTask.id);
+
+  await reserveAssignedNotification({
+    taskId: newTask.id,
+    userIds: assignees.map((assignee) => assignee.id),
+    actorId: newTask.created_by,
+  });
+
   return { ...newTask, assignees, assigned_to: assignees[0]?.id ?? null };
 
   async function runInsertQuery(tasksInputValues, client) {
@@ -184,7 +193,7 @@ async function findOneById(id) {
   }
 }
 
-async function update(id, tasksInputValues) {
+async function update(id, tasksInputValues, { actorId = null } = {}) {
   const currentTask = await findOneById(id);
 
   // Antes de qualquer escrita: transição inválida não pode gravar nem os
@@ -213,6 +222,22 @@ async function update(id, tasksInputValues) {
   });
 
   const assignees = await runSelectAssigneesQuery(id);
+
+  // Só quem entrou agora. A chave única já impediria o e-mail repetido,
+  // mas calcular a diferença evita gastar uma ida ao banco toda vez que
+  // alguém salva a tarefa sem mexer nos responsáveis.
+  const previousIds = new Set(
+    (currentTask.assignees ?? []).map((assignee) => assignee.id),
+  );
+
+  await reserveAssignedNotification({
+    taskId: id,
+    userIds: assignees
+      .map((assignee) => assignee.id)
+      .filter((assigneeId) => !previousIds.has(assigneeId)),
+    actorId,
+  });
+
   return { ...updatedTask, assignees, assigned_to: assignees[0]?.id ?? null };
 
   async function runUpdateQuery(task, client) {
@@ -277,6 +302,29 @@ async function remove(id) {
     }
 
     return results.rows[0];
+  }
+}
+
+// Fora da transação da tarefa, e engolindo o erro: o aviso é consequência
+// da atribuição, não condição dela. Ninguém pode perder uma tarefa salva
+// porque a reserva do e-mail falhou — mas a falha precisa chegar a um
+// humano, então vai para o log.
+async function reserveAssignedNotification({ taskId, userIds, actorId }) {
+  if (userIds.length === 0) {
+    return;
+  }
+
+  try {
+    await notificationScheduler.reserveTaskAssigned({
+      taskId,
+      userIds,
+      actorId,
+    });
+  } catch (error) {
+    logger.error("task_assigned_notification_failed", {
+      task_id: taskId,
+      reason: error.message,
+    });
   }
 }
 

@@ -270,6 +270,10 @@ describe("infra/controller.js", () => {
         "read:activation_token",
         "create:recovery_token",
         "read:recovery_token",
+        // Descadastro de notificação precisa funcionar sem sessão: quem
+        // se incomodou com o e-mail não vai lembrar a senha para pedir
+        // para parar de receber.
+        "read:unsubscribe_token",
       ]);
       expect(request.context.user.id).toBeUndefined();
       expect(next).toHaveBeenCalledTimes(1);

@@ -29,6 +29,34 @@ export const PRIORITY_META = {
 // o instante real. Sem ele, sobra a comparação por dia no fuso do
 // navegador, que é mais grosseira: uma tarefa que vencia hoje às 09:00 já
 // está atrasada às 15:00, mas pelo dia ainda apareceria como "Hoje".
+// O seletor devolve só "AAAA-MM-DD". Gravar isso como meia-noite UTC —
+// que era o que os formulários faziam — joga a tarefa para o dia anterior
+// em qualquer fuso negativo: no Brasil "29/09" virava 28/09 às 21:00, e o
+// aviso de "1 dia antes" saía dois dias cedo.
+//
+// "A tarefa vai até dia 29" quer dizer o fim do dia 29 no fuso de quem
+// preencheu. É isso que gravamos.
+export function dueDateInputToISO(inputValue) {
+  if (!inputValue) return null;
+
+  const [year, month, day] = inputValue.split("-").map(Number);
+
+  // Construtor com componentes separados monta no fuso local, e o
+  // toISOString converte para o instante UTC correspondente.
+  return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString();
+}
+
+// Caminho de volta. Cortar a string ISO no "T" devolveria a data em UTC, e
+// para o fim do dia no Brasil isso já é o dia seguinte.
+export function isoToDueDateInput(isoValue) {
+  if (!isoValue) return "";
+
+  const date = new Date(isoValue);
+  const pad = (value) => String(value).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function fmtDue(dueDateStr, status, isOverdue) {
   if (!dueDateStr) return { label: "Sem prazo", color: "#a9b2ad" };
   const today = new Date();
@@ -184,7 +212,7 @@ function TaskModal({ onClose, onSaved }) {
           description: form.description.trim(),
         }),
         priority: form.priority,
-        ...(form.due_date && { due_date: form.due_date + "T00:00:00.000Z" }),
+        ...(form.due_date && { due_date: dueDateInputToISO(form.due_date) }),
         assigned_to: form.assignees,
       };
       const res = await fetch("/api/v1/tasks", {
@@ -663,6 +691,7 @@ export default function Shell({ children, requireFeature }) {
   const isUsuarios = router.pathname === "/usuarios";
   const isIndicadores = router.pathname === "/indicadores";
   const isAgenda = router.pathname === "/agenda";
+  const isNotificacoes = router.pathname === "/configuracoes/notificacoes";
 
   const pageTitle = isTarefas
     ? "Tarefas"
@@ -672,7 +701,9 @@ export default function Shell({ children, requireFeature }) {
         ? "Indicadores"
         : isAgenda
           ? "Agenda de campo"
-          : "Início";
+          : isNotificacoes
+            ? "Notificações"
+            : "Início";
   const pageSubtitle = isTarefas
     ? "Gestão de tarefas da equipe"
     : isUsuarios
@@ -681,7 +712,9 @@ export default function Shell({ children, requireFeature }) {
         ? "Métricas e desempenho da equipe"
         : isAgenda
           ? "Sincronizada com o Google Calendar"
-          : "Visão geral da sua operação";
+          : isNotificacoes
+            ? "O que você recebe por e-mail e quando"
+            : "Visão geral da sua operação";
 
   if (isLoading || (!user && !error)) {
     return <div style={{ minHeight: "100vh", background: "#eef2ef" }} />;
@@ -863,6 +896,25 @@ export default function Shell({ children, requireFeature }) {
             }
           />
         )}
+
+        <NavButton
+          active={isNotificacoes}
+          onClick={() => router.push("/configuracoes/notificacoes")}
+          label="Notificações"
+          icon={
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+            </svg>
+          }
+        />
 
         <div
           style={{

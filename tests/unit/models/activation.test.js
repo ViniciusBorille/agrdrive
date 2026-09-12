@@ -56,15 +56,17 @@ describe("models/activation.js", () => {
       expect(email.send.mock.calls[0][0].text).toContain("Fulano, clique");
     });
 
-    test("envia a partir do remetente institucional", async () => {
+    // O remetente institucional deixou de ser repetido em cada model e
+    // passou a ser o padrão do `infra/email.js`. O que cabe verificar aqui
+    // é que este model não sobrescreve esse padrão; que o padrão é o
+    // endereço certo, quem garante é o teste de `infra/email.js`.
+    test("delega o remetente ao padrão central", async () => {
       await activation.sendEmailToUser(
         { username: "Fulano", email: "fulano@agrdrive.com.br" },
         { token: "token-cru" },
       );
 
-      expect(email.send.mock.calls[0][0].from).toBe(
-        "AgrDrive <contato@agrdrive.com.br>",
-      );
+      expect(email.send.mock.calls[0][0]).not.toHaveProperty("from");
     });
   });
 

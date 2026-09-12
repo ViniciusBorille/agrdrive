@@ -73,7 +73,6 @@ async function create(userId) {
 
 async function sendEmailToUser(user, activationToken) {
   await email.send({
-    from: "AgrDrive <contato@agrdrive.com.br>",
     to: user.email,
     subject: "Ative seu cadastro no AgrDrive!",
     text: `${user.username}, clique no link abaixo para ativar seu cadastro no AgrDrive:

@@ -101,6 +101,7 @@ function injectAnonymousUser(request) {
       "read:activation_token",
       "create:recovery_token",
       "read:recovery_token",
+      "read:unsubscribe_token",
     ],
   };
 
