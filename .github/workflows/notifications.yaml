@@ -109,6 +109,27 @@ jobs:
           # funcionou, foram as entregas que não. Transformar isso em falha
           # do workflow é o que faz a notificação chegar a uma pessoa, já
           # que uma entrega que esgotou as tentativas não será retentada.
+          # Uma entrega só vira FAILED na terceira tentativa. Sem as duas
+          # linhas abaixo, a primeira execução com o SMTP quebrado responde
+          # `retrying: N, failed: 0` e o workflow fica verde — verde
+          # idêntico ao de uma execução que entregou tudo. Foi assim que a
+          # primeira conferência contra o staging passou sem ninguém receber
+          # e-mail nenhum.
+          repetir=$(jq -r '.retrying // 0' < "$corpo")
+          enviados=$(jq -r '.sent // 0' < "$corpo")
+          reservados=$(jq -r '.reserved // 0' < "$corpo")
+
+          if [ "$repetir" -gt 0 ]; then
+            echo "::warning::$repetir entrega(s) falharam e serão retentadas - confira a coluna error em notification_deliveries"
+          fi
+
+          # Nada a enviar é resultado legítimo, e na maioria das execuções é
+          # o esperado. Mas é também o que se vê quando ninguém tem prazo
+          # próximo e a pessoa acha que o sistema está quebrado.
+          if [ "$reservados" = "0" ] && [ "$enviados" = "0" ]; then
+            echo "::notice::nenhum aviso estava vencido nesta execução; nada foi enviado"
+          fi
+
           falhas=$(jq -r '.failed // 0' < "$corpo")
 
           if [ "$falhas" -gt 0 ]; then
