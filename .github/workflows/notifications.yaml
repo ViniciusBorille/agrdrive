@@ -28,13 +28,36 @@ name: Disparo de notificações
 #
 # Variable opcional (não secret):
 #
-#   NOTIFICATIONS_DISPATCH_URL      para apontar o disparo a um preview em
-#                                   vez da produção.
+#   NOTIFICATIONS_DISPATCH_URL      para apontar **todo** disparo, inclusive
+#                                   o agendado, a um preview em vez da
+#                                   produção. Para um teste pontual prefira
+#                                   o campo `url` da execução manual, que
+#                                   não deixa o cron desviado depois.
+#
+# Para conferir contra o staging sem mandar e-mail: Actions > Run workflow,
+# preencha `url` com o endereço do preview e marque `dry_run`. O segredo é
+# injetado pelo próprio GitHub e não passa pela máquina de ninguém.
 
 on:
   schedule:
     - cron: "0 * * * *"
+
+  # Os campos abaixo valem **só para a execução manual**. Apontar o staging
+  # pela variável `NOTIFICATIONS_DISPATCH_URL` também funcionaria, mas ela é
+  # do repositório inteiro: esquecer de removê-la faria o cron horário parar
+  # de disparar a produção, em silêncio. Como input, o desvio morre no fim
+  # da execução.
   workflow_dispatch:
+    inputs:
+      url:
+        description: "Endereço do disparo (vazio = produção)"
+        required: false
+        type: string
+      dry_run:
+        description: "Modo seco: apura e diz o que faria, sem enviar e-mail"
+        required: false
+        default: false
+        type: boolean
 
 # Este workflow não toca no repositório.
 permissions: {}
@@ -47,17 +70,30 @@ jobs:
     steps:
       - name: Disparar
         env:
-          URL: ${{ vars.NOTIFICATIONS_DISPATCH_URL || 'https://agrdrive.com.br/api/v1/notifications/dispatch' }}
+          # Precedência: o que veio no formulário da execução manual, depois
+          # a variável do repositório, depois a produção.
+          URL: ${{ inputs.url || vars.NOTIFICATIONS_DISPATCH_URL || 'https://agrdrive.com.br/api/v1/notifications/dispatch' }}
+          DRY_RUN: ${{ inputs.dry_run }}
           SECRET: ${{ secrets.NOTIFICATIONS_DISPATCH_SECRET }}
         run: |
           set -euo pipefail
           test -n "${SECRET:-}" || { echo "::error::secret NOTIFICATIONS_DISPATCH_SECRET não configurado"; exit 1; }
 
+          # No agendamento `inputs` não existe e a variável vem vazia, que é
+          # o padrão certo: cron nunca roda em modo seco.
+          alvo="$URL"
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            alvo="$URL?dry_run=true"
+            echo "🔍 modo seco: nenhum e-mail será enviado"
+          fi
+
+          echo "Alvo: $alvo"
+
           corpo=$(mktemp)
 
           # O tempo limite acompanha o da função serverless: esperar mais que
           # ela não traria resposta, só prenderia o runner.
-          status=$(curl -sS -X POST "$URL" \
+          status=$(curl -sS -X POST "$alvo" \
             -H "Authorization: Bearer $SECRET" \
             -H "Content-Type: application/json" \
             --max-time 120 \
