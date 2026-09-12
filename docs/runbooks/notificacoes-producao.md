@@ -14,22 +14,56 @@ autenticar o domínio de envio (AG-116).
 > **modo seco**, que não envia nada; a parte B autentica o domínio; só
 > então a parte A é concluída.
 
-## Pré-requisito: o código precisa estar na branch padrão
+## Pré-requisito: migrations **antes** do deploy
 
-Nada disto funciona enquanto o épico viver na branch `notifications`.
-Publicar as variáveis de ambiente antes do merge não quebra nada, mas
-também não liga nada — vale conferir que os três pontos abaixo já
-aconteceram antes de tentar qualquer passo:
+> ⚠️ **Esta ordem não é preferência, é requisito.** Este projeto não aplica
+> migrations no deploy — não há `vercel.json` nem passo de build que faça
+> isso. Subir o código antes de migrar quebra o **cadastro de usuário**,
+> não só a tela de notificações.
+>
+> O motivo está em `models/user.js`: desde o commit `203e994`, criar
+> usuário grava as preferências padrão de notificação, porque quem nasce
+> sem linha nunca é apurado pelo agendador. Sem as tabelas, esse `INSERT`
+> lança e o erro sobe — uma operação que funcionava antes passa a falhar.
+> Aconteceu de verdade na primeira subida deste épico.
 
-- **O endpoint existe em produção.** `/api/v1/notifications/dispatch` só
-  passa a responder depois que o código estiver na `main` e a Vercel tiver
-  feito o deploy. Antes disso, a chamada devolve 404, não 401.
-- **O workflow existe na branch padrão.** O GitHub só executa `schedule` a
+Antes de qualquer coisa, o backup. **Nenhuma migration deste projeto tem
+`down`**, então não existe volta pelo código:
+
+```bash
+npm run backup:branch -- antes-das-notificacoes
+```
+
+Depois aplique as migrations no banco de destino. Não use
+`npm run migrations:up`: aquele script força `--envPath .env.development` e
+apontaria para o Postgres local.
+
+```bash
+DATABASE_URL="<url-do-neon>" npx node-pg-migrate -m infra/migrations up
+```
+
+Alternativa pelo próprio sistema, para usuário com a feature
+`create:migration` — `GET` na mesma rota lista o que está pendente sem
+escrever nada, e é o diagnóstico mais rápido quando uma tela reclama:
+
+```bash
+curl -X POST "https://agrdrive.com.br/api/v1/migrations" -H "Cookie: session_id=<cookie>"
+```
+
+Só então confira os dois pontos que dependem do deploy:
+
+- **O endpoint existe.** `/api/v1/notifications/dispatch` só responde
+  depois que o código estiver na `main` e a Vercel tiver feito o deploy.
+  Antes disso, a chamada devolve 404, não 401.
+- **O workflow está na branch padrão.** O GitHub só executa `schedule` a
   partir do arquivo que está na branch padrão. Com
-  `.github/workflows/notifications.yaml` apenas na branch de trabalho, o
+  `.github/workflows/notifications.yaml` apenas numa branch de trabalho, o
   cron não roda nem aparece na aba Actions.
-- **As migrations rodaram.** As tabelas de preferências, entregas e tokens
-  de descadastro precisam existir no banco de produção.
+
+> **Se a Vercel usar o mesmo banco para preview e produção** — que é o
+> padrão, a menos que você tenha separado —, migrar "no staging" já mexe na
+> produção. Não é problema, mas torna o backup acima obrigatório, e não
+> recomendado.
 
 ## Parte A — ligar o agendador (AG-112)
 
@@ -276,11 +310,13 @@ desligar as preferências do endereço que rejeitou.
 
 ## Checklist
 
-**Pré-requisito**
+**Pré-requisito** — nesta ordem
 
+- [ ] Backup do Neon criado (`npm run backup:branch`)
+- [ ] Migrations aplicadas no banco de destino
 - [ ] Épico na `main` e deploy feito na Vercel
 - [ ] `.github/workflows/notifications.yaml` na branch padrão
-- [ ] Migrations aplicadas no banco de produção
+- [ ] Cadastro de usuário conferido depois do deploy
 
 **AG-112**
 
