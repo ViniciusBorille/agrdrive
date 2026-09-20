@@ -641,6 +641,7 @@ function TaskRow({ t, userId }) {
   const [editOpen, setEditOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [statusError, setStatusError] = useState(null);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -703,13 +704,28 @@ function TaskRow({ t, userId }) {
     }
     setBusy(true);
     setMenuOpen(false);
+    setStatusError(null);
     try {
-      await fetch(`/api/v1/tasks/${t.id}`, {
+      // Sem olhar a resposta, uma recusa do servidor virava silêncio: o
+      // menu fechava, a lista recarregava e a linha continuava no status
+      // antigo, sem dizer por quê. Quem clicou conclui que a tela está
+      // quebrada — e o motivo real (enum faltando no banco, tarefa já
+      // concluída) some.
+      const res = await fetch(`/api/v1/tasks/${t.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setStatusError(data.message || "Não foi possível alterar o status.");
+        return;
+      }
+
       invalidateTasks();
+    } catch {
+      setStatusError("Não foi possível falar com o servidor.");
     } finally {
       setBusy(false);
     }
@@ -765,6 +781,32 @@ function TaskRow({ t, userId }) {
           >
             {t.title}
           </div>
+          {statusError && (
+            <div
+              style={{
+                fontSize: 12.5,
+                color: "#c0392b",
+                marginTop: 3,
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                style={{ flexShrink: 0 }}
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v5M12 16h.01" />
+              </svg>
+              {statusError}
+            </div>
+          )}
           {t.description && (
             <div
               style={{
