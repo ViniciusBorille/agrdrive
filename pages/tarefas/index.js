@@ -998,7 +998,7 @@ function TaskRow({ t, userId }) {
                     lineHeight: 1.35,
                   }}
                 >
-                  Tarefa concluída — o status não muda mais.
+                  Tarefa encerrada — o status não muda mais.
                 </div>
               )}
 

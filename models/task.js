@@ -4,6 +4,7 @@ import notificationScheduler from "@/models/notification-scheduler.js";
 import { NotFoundError, UnprocessableEntityError } from "@/infra/errors.js";
 import {
   CLOSED_TASK_STATUSES,
+  TASK_STATUS_LABELS,
   canTransitionTaskStatus,
 } from "@/models/task-status.js";
 
@@ -31,8 +32,10 @@ function assertStatusTransition(currentStatus, nextStatus) {
     return;
   }
 
+  const label = TASK_STATUS_LABELS[currentStatus] ?? currentStatus;
+
   throw new UnprocessableEntityError({
-    message: "Uma tarefa concluída não muda mais de status.",
+    message: `Uma tarefa ${label.toLowerCase()} não muda mais de status.`,
     action: "Crie uma nova tarefa se o trabalho precisar continuar.",
   });
 }
@@ -190,8 +193,8 @@ async function findOneById(id) {
 async function update(id, tasksInputValues, { actorId = null } = {}) {
   const currentTask = await findOneById(id);
 
-  // Antes de qualquer escrita: mexer numa tarefa concluída não pode
-  // gravar nem os outros campos que vieram na mesma requisição.
+  // Antes de qualquer escrita: mexer no status de uma tarefa encerrada
+  // não pode gravar nem os outros campos que vieram na mesma requisição.
   if ("status" in tasksInputValues) {
     assertStatusTransition(currentTask.status, tasksInputValues.status);
   }

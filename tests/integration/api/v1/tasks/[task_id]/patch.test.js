@@ -372,7 +372,8 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
     expect(responseBody.status).toBe("IN_PROGRESS");
   });
 
-  test("Aceita reabrir uma tarefa cancelada", async () => {
+  // Encerrar é definitivo pelas duas portas de saída.
+  test("Recusa CANCELLED -> IN_PROGRESS com 422", async () => {
     const { creator, sessionObject } = await authenticatedCreator();
     const createdTask = await orchestrator.createTask({
       created_by: creator.id,
@@ -385,14 +386,14 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
       "IN_PROGRESS",
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(422);
 
     const responseBody = await response.json();
-    expect(responseBody.status).toBe("IN_PROGRESS");
+    expect(responseBody.message).toBe(
+      "Uma tarefa cancelada não muda mais de status.",
+    );
   });
 
-  // Concluir é a única porta sem volta: cancelar é reversível, concluir
-  // declara que o trabalho acabou.
   test("Recusa COMPLETED -> PENDING com 422", async () => {
     const { creator, sessionObject } = await authenticatedCreator();
     const createdTask = await orchestrator.createTask({
@@ -411,6 +412,9 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
     const responseBody = await response.json();
     expect(responseBody.name).toBe("UnprocessableEntityError");
     expect(responseBody.status_code).toBe(422);
+    expect(responseBody.message).toBe(
+      "Uma tarefa concluída não muda mais de status.",
+    );
   });
 
   test("Recusa COMPLETED -> CANCELLED com 422", async () => {
