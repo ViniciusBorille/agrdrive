@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import useSWR, { mutate } from "swr";
 import Shell, {
   dueDateInputToISO,
@@ -635,13 +636,14 @@ function EditTaskModal({ task, isCreator, onClose }) {
   );
 }
 
-function TaskRow({ t, userId }) {
+function TaskRow({ t, userId, highlighted = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const [editOpen, setEditOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [busy, setBusy] = useState(false);
   const [statusError, setStatusError] = useState(null);
+  const rowRef = useRef(null);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -657,6 +659,13 @@ function TaskRow({ t, userId }) {
   // PATCH vai recusar viraria um erro depois do clique, em vez de uma
   // opção que simplesmente não aparece.
   const isFinal = isTaskStatusFinal(t.status);
+
+  // A tarefa apontada pela Agenda pode estar bem abaixo da dobra;
+  // destacar sem rolar até ela destacaria algo que ninguém vê.
+  useEffect(() => {
+    if (!highlighted) return;
+    rowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [highlighted]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -754,6 +763,7 @@ function TaskRow({ t, userId }) {
   return (
     <>
       <div
+        ref={rowRef}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
@@ -763,7 +773,14 @@ function TaskRow({ t, userId }) {
           padding: "15px 20px",
           borderBottom: "1px solid #f2f5f3",
           alignItems: "center",
-          background: busy ? "#f4f7f5" : hovered ? "#f9fbfa" : "transparent",
+          background: busy
+            ? "#f4f7f5"
+            : highlighted
+              ? "#eef6f1"
+              : hovered
+                ? "#f9fbfa"
+                : "transparent",
+          boxShadow: highlighted ? "inset 3px 0 0 #1c6856" : "none",
           transition: "background .12s",
           opacity: busy ? 0.7 : 1,
         }}
@@ -1141,21 +1158,24 @@ function MenuRow({ label, icon, checked, checkedColor, red, onClick }) {
 }
 
 export default function Tarefas() {
+  const router = useRouter();
   const [fView, setFView] = useState("all");
   const [fStatus, setFStatus] = useState("ALL");
   const [fPriority, setFPriority] = useState("ALL");
+
+  // Quem chega pela Agenda vem atrás de uma tarefa específica, que pode
+  // estar fora do recorte deixado na última visita a esta tela. Em vez
+  // de zerar os filtros por baixo do usuário, a busca passa a ser ampla
+  // e a tarefa apontada entra na lista mesmo que os filtros a
+  // escondessem — eles continuam valendo para todo o resto.
+  const highlightId = router.isReady ? (router.query.tarefa ?? null) : null;
 
   const { data: user } = useSWR("/api/v1/user", fetcher, {
     revalidateOnFocus: false,
   });
   const userId = user?.id;
 
-  const viewKey =
-    fView === "all"
-      ? "/api/v1/tasks?view=all"
-      : fView === "assigned"
-        ? "/api/v1/tasks?view=assigned"
-        : "/api/v1/tasks?view=created";
+  const viewKey = `/api/v1/tasks?view=${highlightId ? "all" : fView}`;
 
   const { data: tasks } = useSWR(viewKey, fetcher, {
     revalidateOnFocus: false,
@@ -1169,16 +1189,23 @@ export default function Tarefas() {
       <Shell requireFeature="use:tasks">
         {({ openModal, searchQuery }) => {
           let filtered = tasks || [];
+          // A tarefa apontada pela Agenda escapa de cada filtro: quem
+          // clicou nela na Agenda quer vê-la, não descobrir que um
+          // recorte antigo a escondeu.
+          const keep = (t) => t.id === highlightId;
           if (fStatus !== "ALL")
-            filtered = filtered.filter((t) => t.status === fStatus);
+            filtered = filtered.filter((t) => t.status === fStatus || keep(t));
           if (fPriority !== "ALL")
-            filtered = filtered.filter((t) => t.priority === fPriority);
+            filtered = filtered.filter(
+              (t) => t.priority === fPriority || keep(t),
+            );
           if (searchQuery?.trim()) {
             const q = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(
               (t) =>
                 t.title.toLowerCase().includes(q) ||
-                (t.description || "").toLowerCase().includes(q),
+                (t.description || "").toLowerCase().includes(q) ||
+                keep(t),
             );
           }
           const ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
@@ -1410,7 +1437,12 @@ export default function Tarefas() {
                   <EmptyState />
                 ) : (
                   filtered.map((t) => (
-                    <TaskRow key={t.id} t={t} userId={userId} />
+                    <TaskRow
+                      key={t.id}
+                      t={t}
+                      userId={userId}
+                      highlighted={t.id === highlightId}
+                    />
                   ))
                 )}
               </div>

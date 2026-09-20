@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import useSWR, { mutate } from "swr";
-import Shell, { PRIORITY_META } from "@/components/Shell";
+import Shell, { PRIORITY_META, STATUS_META } from "@/components/Shell";
+import { CLOSED_TASK_STATUSES } from "@/models/task-status.js";
 
 const fetcher = (url) =>
   fetch(url).then((r) => {
@@ -21,6 +22,51 @@ const EVENT_TYPES = {
 };
 
 const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+// Quais tarefas entram na Agenda. Em qualquer uma das opções, tarefa de
+// outra pessoa que não foi atribuída a você fica de fora — o `view` da
+// API já recorta assim, e é o que faz a Agenda ser a sua, não a da
+// empresa inteira.
+const TASK_VIEWS = [
+  { value: "all", label: "Minhas tarefas" },
+  { value: "assigned", label: "Atribuídas a mim" },
+  { value: "created", label: "Criadas por mim" },
+];
+
+// A cor do item carrega uma informação de cada vez. Prioridade responde
+// "o que é mais urgente hoje", status responde "o que ainda falta" — na
+// mesma tela as duas competiriam pelo mesmo pixel, então o filtro
+// escolhe qual delas está contando.
+const COLOR_MODES = [
+  { value: "priority", label: "Urgência" },
+  { value: "status", label: "Status" },
+];
+
+// Visita não tem prioridade nem status; segue pela cor do tipo, que é a
+// única que ela tem.
+function agendaItemTone(item, colorMode) {
+  if (!item.isTask) {
+    return EVENT_TYPES[item.type].tone;
+  }
+
+  if (colorMode === "status") {
+    return STATUS_META[item.task.status]?.color ?? EVENT_TYPES.TAREFA.tone;
+  }
+
+  return PRIORITY_META[item.task.priority]?.dot ?? EVENT_TYPES.TAREFA.tone;
+}
+
+function agendaItemLegend(item, colorMode) {
+  if (!item.isTask) {
+    return item.client || "Sem cliente";
+  }
+
+  if (colorMode === "status") {
+    return STATUS_META[item.task.status]?.label ?? "Tarefa";
+  }
+
+  return PRIORITY_META[item.task.priority]?.label ?? "Tarefa";
+}
 
 function invalidateVisits() {
   mutate(
@@ -58,9 +104,9 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// Tarefas atribuídas ao usuário aparecem na Agenda como um item de
-// calendário somente leitura (sem horário de fim — usa o próprio prazo
-// como início e fim), reaproveitando a mesma forma de item das visitas.
+// Tarefas aparecem na Agenda como um item de calendário somente leitura
+// (sem horário de fim — usa o próprio prazo como início e fim),
+// reaproveitando a mesma forma de item das visitas.
 function taskToAgendaItem(t) {
   const d = new Date(t.due_date);
   const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -74,6 +120,7 @@ function taskToAgendaItem(t) {
     type: "TAREFA",
     synced: false,
     isTask: true,
+    isOverdue: !!t.is_overdue,
     task: t,
   };
 }
@@ -133,6 +180,66 @@ function ViewTab({ active, onClick, label }) {
       )}
       <span style={{ position: "relative" }}>{label}</span>
     </button>
+  );
+}
+
+// `select` nativo em vez de menu próprio: são poucas opções, e o nativo
+// já resolve teclado, toque e tela pequena de graça.
+function FilterSelect({ label, value, options, onChange }) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        fontSize: 12.5,
+        color: "#6b7670",
+      }}
+    >
+      {label}
+      <span style={{ position: "relative", display: "inline-flex" }}>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            height: 34,
+            border: "1.5px solid #e6ece8",
+            borderRadius: 9,
+            padding: "0 30px 0 11px",
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: "#3a443f",
+            background: "#fff",
+            outline: "none",
+            appearance: "none",
+            cursor: "pointer",
+          }}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#8a938e"
+          strokeWidth="2"
+          style={{
+            position: "absolute",
+            right: 9,
+            top: "50%",
+            transform: "translateY(-50%)",
+            pointerEvents: "none",
+          }}
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </span>
+    </label>
   );
 }
 
@@ -612,16 +719,16 @@ export default function Agenda() {
   const [editingVisit, setEditingVisit] = useState(null);
   const [modalDate, setModalDate] = useState(today);
   const [toast, setToast] = useState(null);
+  const [taskView, setTaskView] = useState("all");
+  const [colorMode, setColorMode] = useState("priority");
   const toastTimer = useRef(null);
 
   const { data: visits } = useSWR("/api/v1/visits", fetcher, {
     revalidateOnFocus: false,
   });
-  const { data: assignedTasks } = useSWR(
-    "/api/v1/tasks?view=assigned",
-    fetcher,
-    { revalidateOnFocus: false },
-  );
+  const { data: tasks } = useSWR(`/api/v1/tasks?view=${taskView}`, fetcher, {
+    revalidateOnFocus: false,
+  });
   const { data: googleStatus, mutate: mutateGoogleStatus } = useSWR(
     "/api/v1/google-calendar",
     fetcher,
@@ -662,10 +769,12 @@ export default function Agenda() {
     setShowModal(true);
   };
   // Tarefas são somente leitura na Agenda — editar campos de tarefa
-  // (status, responsáveis, prioridade) é feito na tela de Tarefas.
+  // (status, responsáveis, prioridade) é feito na tela de Tarefas, e o
+  // id vai junto para a lista abrir já parada na tarefa certa em vez de
+  // largar a pessoa no topo de tudo.
   const openAgendaItem = (item) => {
     if (item.isTask) {
-      router.push("/tarefas");
+      router.push(`/tarefas?tarefa=${item.task.id}`);
       return;
     }
     openEditVisitModal(item);
@@ -738,8 +847,11 @@ export default function Agenda() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleConnected]);
 
-  const taskAgendaItems = (assignedTasks || [])
-    .filter((t) => t.due_date && t.status !== "CANCELLED")
+  // Tarefa encerrada sai do calendário: o prazo dela não cobra mais
+  // nada, e mantê-la só disputaria espaço com o que ainda falta fazer.
+  // Ela continua na tela de Tarefas, que é onde se olha histórico.
+  const taskAgendaItems = (tasks || [])
+    .filter((t) => t.due_date && !CLOSED_TASK_STATUSES.includes(t.status))
     .map(taskToAgendaItem);
   const visitList = [...(visits || []), ...taskAgendaItems];
   const monthGrid = buildMonthGrid(
@@ -828,7 +940,7 @@ export default function Agenda() {
                   Agenda de campo
                 </h1>
                 <p style={{ fontSize: 13.5, color: "#6b7670", margin: 0 }}>
-                  Visitas, tarefas atribuídas a você e reuniões da equipe
+                  Visitas e prazos das suas tarefas, num calendário só
                 </p>
               </div>
               <button
@@ -971,6 +1083,18 @@ export default function Agenda() {
                   label="Semana"
                 />
               </div>
+              <FilterSelect
+                label="Tarefas"
+                value={taskView}
+                options={TASK_VIEWS}
+                onChange={setTaskView}
+              />
+              <FilterSelect
+                label="Cor por"
+                value={colorMode}
+                options={COLOR_MODES}
+                onChange={setColorMode}
+              />
               {view === "month" ? (
                 <div
                   style={{
@@ -1161,7 +1285,7 @@ export default function Agenda() {
                                 display: "flex",
                                 alignItems: "center",
                                 gap: 5,
-                                background: `${EVENT_TYPES[ev.type].tone}17`,
+                                background: `${agendaItemTone(ev, colorMode)}17`,
                                 borderRadius: 5,
                                 padding: "2px 6px",
                                 overflow: "hidden",
@@ -1172,14 +1296,19 @@ export default function Agenda() {
                                   width: 6,
                                   height: 6,
                                   borderRadius: "50%",
-                                  background: EVENT_TYPES[ev.type].tone,
+                                  background: agendaItemTone(ev, colorMode),
                                   flexShrink: 0,
                                 }}
                               />
                               <span
                                 style={{
                                   fontSize: 11,
-                                  color: "#3a443f",
+                                  // Atraso fala mais alto que a cor do
+                                  // filtro: a bolinha continua dizendo
+                                  // urgência ou status, o texto avisa
+                                  // que o prazo já passou.
+                                  color: ev.isOverdue ? "#c0392b" : "#3a443f",
+                                  fontWeight: ev.isOverdue ? 600 : 400,
                                   whiteSpace: "nowrap",
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
@@ -1278,7 +1407,7 @@ export default function Agenda() {
                           style={{
                             width: 3,
                             borderRadius: 3,
-                            background: EVENT_TYPES[ev.type].tone,
+                            background: agendaItemTone(ev, colorMode),
                             flexShrink: 0,
                           }}
                         />
@@ -1293,6 +1422,17 @@ export default function Agenda() {
                             {ev.isTask
                               ? `Prazo ${ev.start_time.slice(0, 5)}`
                               : `${ev.start_time.slice(0, 5)}–${ev.end_time.slice(0, 5)}`}
+                            {ev.isOverdue && (
+                              <span
+                                style={{
+                                  color: "#c0392b",
+                                  fontWeight: 700,
+                                  marginLeft: 6,
+                                }}
+                              >
+                                · Atrasada
+                              </span>
+                            )}
                           </div>
                           <div
                             style={{
@@ -1310,10 +1450,7 @@ export default function Agenda() {
                               marginTop: 2,
                             }}
                           >
-                            {ev.isTask
-                              ? (PRIORITY_META[ev.task.priority]?.label ??
-                                "Tarefa")
-                              : ev.client || "Sem cliente"}
+                            {agendaItemLegend(ev, colorMode)}
                           </div>
                         </div>
                         <div
@@ -1439,7 +1576,7 @@ export default function Agenda() {
                               width: 7,
                               height: 7,
                               borderRadius: "50%",
-                              background: EVENT_TYPES[ev.type].tone,
+                              background: agendaItemTone(ev, colorMode),
                               flexShrink: 0,
                             }}
                           />
@@ -1447,7 +1584,7 @@ export default function Agenda() {
                             style={{
                               fontSize: 12.5,
                               fontWeight: 600,
-                              color: "#5a635e",
+                              color: ev.isOverdue ? "#c0392b" : "#5a635e",
                               width: 92,
                               flexShrink: 0,
                             }}
@@ -1482,11 +1619,15 @@ export default function Agenda() {
                               minWidth: 0,
                             }}
                           >
-                            ·{" "}
-                            {ev.isTask
-                              ? (PRIORITY_META[ev.task.priority]?.label ??
-                                "Tarefa")
-                              : ev.client || "Sem cliente"}
+                            · {agendaItemLegend(ev, colorMode)}
+                            {ev.isOverdue && (
+                              <span
+                                style={{ color: "#c0392b", fontWeight: 600 }}
+                              >
+                                {" "}
+                                · Atrasada
+                              </span>
+                            )}
                           </span>
                         </div>
                       ))}
