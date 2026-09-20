@@ -1046,7 +1046,12 @@ export default function Agenda() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.7fr 1fr",
+                  // `minmax(0, …)` em vez de `1.7fr 1fr`: uma coluna `fr`
+                  // tem largura mínima automática, então o compromisso de
+                  // título comprido empurrava a coluna do calendário e
+                  // levava a página inteira junto, até o mês não caber na
+                  // tela. Com o mínimo em zero, a proporção manda.
+                  gridTemplateColumns: "minmax(0, 1.7fr) minmax(0, 1fr)",
                   gap: 18,
                 }}
               >
@@ -1058,10 +1063,16 @@ export default function Agenda() {
                     overflow: "hidden",
                   }}
                 >
+                  {/* Cabeçalho e dias na MESMA grade. Eram duas grades
+                      irmãs, cada uma calculando as próprias sete colunas:
+                      bastava o conteúdo de um dia alargar uma coluna para
+                      "Dom, Seg, Ter…" deixar de bater com os números. Numa
+                      grade só, o alinhamento é estrutural — não tem como
+                      divergir. */}
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(7,1fr)",
+                      gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
                       gap: 1,
                       background: "#e6ece8",
                     }}
@@ -1083,15 +1094,6 @@ export default function Agenda() {
                         {wl}
                       </div>
                     ))}
-                  </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(7,1fr)",
-                      gap: 1,
-                      background: "#e6ece8",
-                    }}
-                  >
                     {monthGrid.map((day) => (
                       <div
                         key={day.dateStr}
@@ -1105,6 +1107,10 @@ export default function Agenda() {
                           minHeight: 96,
                           padding: 8,
                           cursor: "pointer",
+                          // Sem estes dois, a célula pede à coluna a
+                          // largura do texto que carrega dentro.
+                          minWidth: 0,
+                          overflow: "hidden",
                         }}
                       >
                         <div
@@ -1177,6 +1183,13 @@ export default function Agenda() {
                                   whiteSpace: "nowrap",
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
+                                  // O `ellipsis` já estava aqui e não
+                                  // cortava nada: item de flex não encolhe
+                                  // abaixo do próprio conteúdo enquanto o
+                                  // mínimo for automático, e com `nowrap`
+                                  // esse conteúdo é o título inteiro.
+                                  minWidth: 0,
+                                  flex: 1,
                                 }}
                               >
                                 {ev.title}
@@ -1443,6 +1456,9 @@ export default function Agenda() {
                               ? `Prazo ${ev.start_time.slice(0, 5)}`
                               : `${ev.start_time.slice(0, 5)}–${ev.end_time.slice(0, 5)}`}
                           </span>
+                          {/* Mesmo `minWidth: 0` da grade do mês: aqui o
+                              título comprido não deformava nada, só
+                              vazava para fora do cartão do dia. */}
                           <span
                             style={{
                               fontSize: 13.5,
@@ -1450,6 +1466,8 @@ export default function Agenda() {
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
+                              minWidth: 0,
+                              flex: 1,
                             }}
                           >
                             {ev.title}
@@ -1461,6 +1479,7 @@ export default function Agenda() {
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
+                              minWidth: 0,
                             }}
                           >
                             ·{" "}
