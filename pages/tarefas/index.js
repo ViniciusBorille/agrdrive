@@ -8,7 +8,7 @@ import Shell, {
   PRIORITY_META,
   STATUS_META,
 } from "@/components/Shell";
-import { allowedTaskStatusTransitions } from "@/models/task-status.js";
+import { isTaskStatusFinal } from "@/models/task-status.js";
 
 const fetcher = (url) =>
   fetch(url).then((r) => {
@@ -652,11 +652,10 @@ function TaskRow({ t, userId }) {
   const pm = PRIORITY_META[t.priority] || PRIORITY_META.MEDIUM;
   const due = fmtDue(t.due_date, t.status, t.is_overdue);
 
-  // Mesma máquina de estados que o servidor usa para validar. Oferecer no
-  // menu um status que o PATCH vai recusar transformaria a regra num erro
-  // depois do clique, em vez de uma opção que simplesmente não aparece.
-  const allowedStatuses = allowedTaskStatusTransitions(t.status);
-  const isClosed = allowedStatuses.length <= 1;
+  // Mesma regra que o servidor aplica. Oferecer no menu um status que o
+  // PATCH vai recusar viraria um erro depois do clique, em vez de uma
+  // opção que simplesmente não aparece.
+  const isFinal = isTaskStatusFinal(t.status);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -679,10 +678,10 @@ function TaskRow({ t, userId }) {
     };
   }, [menuOpen]);
 
-  // Estimativa da altura do menu (maior variante: criador, com os 4
+  // Estimativa da altura do menu (maior variante: criador, com os cinco
   // status + editar + excluir). Usada só pra decidir se abre pra cima
   // ou pra baixo — a `maxHeight` no próprio menu cobre o resto.
-  const MENU_ESTIMATED_HEIGHT = 280;
+  const MENU_ESTIMATED_HEIGHT = 310;
 
   const openMenu = () => {
     const rect = btnRef.current.getBoundingClientRect();
@@ -935,10 +934,10 @@ function TaskRow({ t, userId }) {
                   padding: "5px 10px 3px",
                 }}
               >
-                {isClosed ? "Status" : "Alterar status"}
+                {isFinal ? "Status" : "Alterar status"}
               </div>
-              {STATUS_OPTIONS.filter((opt) =>
-                allowedStatuses.includes(opt.value),
+              {STATUS_OPTIONS.filter(
+                (opt) => !isFinal || opt.value === t.status,
               ).map((opt) => (
                 <MenuRow
                   key={opt.value}
@@ -948,7 +947,7 @@ function TaskRow({ t, userId }) {
                   onClick={() => changeStatus(opt.value)}
                 />
               ))}
-              {isClosed && (
+              {isFinal && (
                 <div
                   style={{
                     fontSize: 11.5,
@@ -957,7 +956,7 @@ function TaskRow({ t, userId }) {
                     lineHeight: 1.35,
                   }}
                 >
-                  Tarefa encerrada — o status não muda mais.
+                  Tarefa concluída — o status não muda mais.
                 </div>
               )}
 
