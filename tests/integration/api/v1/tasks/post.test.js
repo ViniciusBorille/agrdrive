@@ -96,7 +96,9 @@ describe("POST /api/v1/tasks", () => {
       expect(responseBody.status_code).toBe(400);
     });
 
-    test("With valid minimal body (only title)", async () => {
+    // Tarefa sem responsável não aparece na Agenda de ninguém e não
+    // dispara aviso nenhum — nasce invisível.
+    test("Without 'assigned_to'", async () => {
       const createdUser = await orchestrator.createUser();
       const activatedUser = await orchestrator.activateUser(createdUser);
       const sessionObject = await orchestrator.createSession(activatedUser);
@@ -107,7 +109,54 @@ describe("POST /api/v1/tasks", () => {
           "Content-Type": "application/json",
           Cookie: `session_id=${sessionObject.token}`,
         },
-        body: JSON.stringify({ title: "Minha primeira tarefa" }),
+        body: JSON.stringify({ title: "Tarefa sem responsável" }),
+      });
+
+      expect(response.status).toBe(400);
+
+      const responseBody = await response.json();
+
+      expect(responseBody.name).toBe("ValidationError");
+      expect(responseBody.message).toBe("Selecione pelo menos um responsável.");
+    });
+
+    test("With empty 'assigned_to' list", async () => {
+      const createdUser = await orchestrator.createUser();
+      const activatedUser = await orchestrator.activateUser(createdUser);
+      const sessionObject = await orchestrator.createSession(activatedUser);
+
+      const response = await fetch("http:localhost:3000/api/v1/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `session_id=${sessionObject.token}`,
+        },
+        body: JSON.stringify({ title: "Tarefa válida", assigned_to: [] }),
+      });
+
+      expect(response.status).toBe(400);
+
+      const responseBody = await response.json();
+
+      expect(responseBody.message).toBe("Selecione pelo menos um responsável.");
+    });
+
+    test("With valid minimal body (title + assigned_to)", async () => {
+      const createdUser = await orchestrator.createUser();
+      const activatedUser = await orchestrator.activateUser(createdUser);
+      const sessionObject = await orchestrator.createSession(activatedUser);
+      const assignee = await orchestrator.createUser();
+
+      const response = await fetch("http:localhost:3000/api/v1/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `session_id=${sessionObject.token}`,
+        },
+        body: JSON.stringify({
+          title: "Minha primeira tarefa",
+          assigned_to: assignee.id,
+        }),
       });
 
       expect(response.status).toBe(201);
@@ -120,7 +169,7 @@ describe("POST /api/v1/tasks", () => {
         status: "PENDING",
         priority: "MEDIUM",
         created_by: createdUser.id,
-        assigned_to: null,
+        assigned_to: assignee.id,
         due_date: null,
       });
 

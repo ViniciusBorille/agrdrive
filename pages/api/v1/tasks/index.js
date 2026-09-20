@@ -19,15 +19,22 @@ const createTaskSchema = z
       .max(2000, "A descrição deve ter no máximo 2000 caracteres.")
       .optional(),
     priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
-    assigned_to: validator.uuidSchema
-      .or(
+    // Obrigatório: tarefa sem responsável não aparece na Agenda de
+    // ninguém e não dispara aviso nenhum — nasce invisível. A tela de
+    // criação já barrava, mas a regra morava só nela; aqui vale para
+    // qualquer cliente que chame a API.
+    assigned_to: z.union(
+      [
+        validator.uuidSchema,
         z
-          .array(validator.uuidSchema, {
-            invalid_type_error: "O campo responsáveis deve ser uma lista.",
-          })
+          .array(
+            validator.uuidSchema,
+            "O campo responsáveis deve ser uma lista.",
+          )
           .min(1, "Selecione pelo menos um responsável."),
-      )
-      .optional(),
+      ],
+      { error: "Selecione pelo menos um responsável." },
+    ),
     due_date: z.iso.datetime({ offset: true }).optional(),
   })
   .strict("Campos não permitidos foram enviados na requisição.");
