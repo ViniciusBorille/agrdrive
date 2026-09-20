@@ -32,14 +32,11 @@ function assertStatusTransition(currentStatus, nextStatus) {
     return;
   }
 
-  const from = TASK_STATUS_LABELS[currentStatus] ?? currentStatus;
-  const to = TASK_STATUS_LABELS[nextStatus] ?? nextStatus;
+  const label = TASK_STATUS_LABELS[currentStatus] ?? currentStatus;
 
   throw new UnprocessableEntityError({
-    message: `Uma tarefa "${from}" não pode passar para "${to}".`,
-    action: CLOSED_TASK_STATUSES.includes(currentStatus)
-      ? "Tarefas concluídas ou canceladas não mudam mais de status."
-      : "Escolha um status válido para a situação atual da tarefa.",
+    message: `Uma tarefa ${label.toLowerCase()} não muda mais de status.`,
+    action: "Crie uma nova tarefa se o trabalho precisar continuar.",
   });
 }
 
@@ -196,8 +193,8 @@ async function findOneById(id) {
 async function update(id, tasksInputValues, { actorId = null } = {}) {
   const currentTask = await findOneById(id);
 
-  // Antes de qualquer escrita: transição inválida não pode gravar nem os
-  // outros campos que vieram na mesma requisição.
+  // Antes de qualquer escrita: mexer no status de uma tarefa encerrada
+  // não pode gravar nem os outros campos que vieram na mesma requisição.
   if ("status" in tasksInputValues) {
     assertStatusTransition(currentTask.status, tasksInputValues.status);
   }

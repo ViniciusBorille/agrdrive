@@ -8,7 +8,7 @@ import Shell, {
   PRIORITY_META,
   STATUS_META,
 } from "@/components/Shell";
-import { allowedTaskStatusTransitions } from "@/models/task-status.js";
+import { isTaskStatusFinal } from "@/models/task-status.js";
 
 const fetcher = (url) =>
   fetch(url).then((r) => {
@@ -460,6 +460,7 @@ function EditTaskModal({ task, isCreator, onClose }) {
                 >
                   <option value="PENDING">Pendente</option>
                   <option value="IN_PROGRESS">Em andamento</option>
+                  <option value="FINISHING">Em finalização</option>
                   <option value="COMPLETED">Concluída</option>
                   <option value="CANCELLED">Cancelada</option>
                 </select>
@@ -640,6 +641,7 @@ function TaskRow({ t, userId }) {
   const [editOpen, setEditOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [statusError, setStatusError] = useState(null);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -651,11 +653,10 @@ function TaskRow({ t, userId }) {
   const pm = PRIORITY_META[t.priority] || PRIORITY_META.MEDIUM;
   const due = fmtDue(t.due_date, t.status, t.is_overdue);
 
-  // Mesma máquina de estados que o servidor usa para validar. Oferecer no
-  // menu um status que o PATCH vai recusar transformaria a regra num erro
-  // depois do clique, em vez de uma opção que simplesmente não aparece.
-  const allowedStatuses = allowedTaskStatusTransitions(t.status);
-  const isClosed = allowedStatuses.length <= 1;
+  // Mesma regra que o servidor aplica. Oferecer no menu um status que o
+  // PATCH vai recusar viraria um erro depois do clique, em vez de uma
+  // opção que simplesmente não aparece.
+  const isFinal = isTaskStatusFinal(t.status);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -678,10 +679,10 @@ function TaskRow({ t, userId }) {
     };
   }, [menuOpen]);
 
-  // Estimativa da altura do menu (maior variante: criador, com os 4
+  // Estimativa da altura do menu (maior variante: criador, com os cinco
   // status + editar + excluir). Usada só pra decidir se abre pra cima
   // ou pra baixo — a `maxHeight` no próprio menu cobre o resto.
-  const MENU_ESTIMATED_HEIGHT = 280;
+  const MENU_ESTIMATED_HEIGHT = 310;
 
   const openMenu = () => {
     const rect = btnRef.current.getBoundingClientRect();
@@ -703,13 +704,28 @@ function TaskRow({ t, userId }) {
     }
     setBusy(true);
     setMenuOpen(false);
+    setStatusError(null);
     try {
-      await fetch(`/api/v1/tasks/${t.id}`, {
+      // Sem olhar a resposta, uma recusa do servidor virava silêncio: o
+      // menu fechava, a lista recarregava e a linha continuava no status
+      // antigo, sem dizer por quê. Quem clicou conclui que a tela está
+      // quebrada — e o motivo real (enum faltando no banco, tarefa já
+      // concluída) some.
+      const res = await fetch(`/api/v1/tasks/${t.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setStatusError(data.message || "Não foi possível alterar o status.");
+        return;
+      }
+
       invalidateTasks();
+    } catch {
+      setStatusError("Não foi possível falar com o servidor.");
     } finally {
       setBusy(false);
     }
@@ -730,6 +746,7 @@ function TaskRow({ t, userId }) {
   const STATUS_OPTIONS = [
     { value: "PENDING", label: "Pendente", color: "#8a6d0e" },
     { value: "IN_PROGRESS", label: "Em andamento", color: "#2b5f93" },
+    { value: "FINISHING", label: "Em finalização", color: "#1b6f7a" },
     { value: "COMPLETED", label: "Concluída", color: "#2c6e49" },
     { value: "CANCELLED", label: "Cancelada", color: "#8a8f8c" },
   ];
@@ -764,6 +781,32 @@ function TaskRow({ t, userId }) {
           >
             {t.title}
           </div>
+          {statusError && (
+            <div
+              style={{
+                fontSize: 12.5,
+                color: "#c0392b",
+                marginTop: 3,
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                style={{ flexShrink: 0 }}
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v5M12 16h.01" />
+              </svg>
+              {statusError}
+            </div>
+          )}
           {t.description && (
             <div
               style={{
@@ -933,10 +976,10 @@ function TaskRow({ t, userId }) {
                   padding: "5px 10px 3px",
                 }}
               >
-                {isClosed ? "Status" : "Alterar status"}
+                {isFinal ? "Status" : "Alterar status"}
               </div>
-              {STATUS_OPTIONS.filter((opt) =>
-                allowedStatuses.includes(opt.value),
+              {STATUS_OPTIONS.filter(
+                (opt) => !isFinal || opt.value === t.status,
               ).map((opt) => (
                 <MenuRow
                   key={opt.value}
@@ -946,7 +989,7 @@ function TaskRow({ t, userId }) {
                   onClick={() => changeStatus(opt.value)}
                 />
               ))}
-              {isClosed && (
+              {isFinal && (
                 <div
                   style={{
                     fontSize: 11.5,
@@ -1149,6 +1192,8 @@ export default function Tarefas() {
             PENDING: tasks?.filter((t) => t.status === "PENDING").length ?? 0,
             IN_PROGRESS:
               tasks?.filter((t) => t.status === "IN_PROGRESS").length ?? 0,
+            FINISHING:
+              tasks?.filter((t) => t.status === "FINISHING").length ?? 0,
             COMPLETED:
               tasks?.filter((t) => t.status === "COMPLETED").length ?? 0,
             CANCELLED:
@@ -1296,6 +1341,15 @@ export default function Tarefas() {
                   count={counts.IN_PROGRESS}
                   activeBg="#e6eef6"
                   activeBorder="#3a7ca5"
+                />
+                <StatusChipFixed
+                  active={fStatus === "FINISHING"}
+                  onClick={() => setFStatus("FINISHING")}
+                  dot="#2f97a6"
+                  label="Em finalização"
+                  count={counts.FINISHING}
+                  activeBg="#e0eff1"
+                  activeBorder="#2f97a6"
                 />
                 <StatusChipFixed
                   active={fStatus === "COMPLETED"}

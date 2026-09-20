@@ -14,6 +14,7 @@ const fetcher = (url) =>
 export const STATUS_META = {
   PENDING: { label: "Pendente", bg: "#fbf3da", color: "#8a6d0e" },
   IN_PROGRESS: { label: "Em andamento", bg: "#e6eef6", color: "#2b5f93" },
+  FINISHING: { label: "Em finalização", bg: "#e0eff1", color: "#1b6f7a" },
   COMPLETED: { label: "Concluída", bg: "#e6f1ea", color: "#2c6e49" },
   CANCELLED: { label: "Cancelada", bg: "#f0f1f1", color: "#8a8f8c" },
 };

@@ -302,7 +302,98 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
     expect(response.status).toBe(200);
   });
 
-  // O histórico do que aconteceu vale mais que desfazer um clique errado.
+  test("Aceita IN_PROGRESS -> FINISHING -> COMPLETED", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "IN_PROGRESS",
+    });
+
+    const toFinishing = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "FINISHING",
+    );
+
+    expect(toFinishing.status).toBe(200);
+
+    const finishingBody = await toFinishing.json();
+    expect(finishingBody.status).toBe("FINISHING");
+
+    const toCompleted = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "COMPLETED",
+    );
+
+    expect(toCompleted.status).toBe(200);
+  });
+
+  // Em finalização a tarefa ainda tem prazo a cumprir — encerrada é só
+  // concluída ou cancelada.
+  test("Marca como atrasada a tarefa FINISHING com prazo vencido", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "IN_PROGRESS",
+      due_date: new Date(Date.now() - 86400000).toISOString(),
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "FINISHING",
+    );
+
+    expect(response.status).toBe(200);
+
+    const responseBody = await response.json();
+    expect(responseBody.is_overdue).toBe(true);
+  });
+
+  // Fora de concluída não há caminho obrigatório: quem clicou errado
+  // volta atrás sem precisar abrir outra tarefa.
+  test("Aceita voltar de FINISHING para IN_PROGRESS", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "FINISHING",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "IN_PROGRESS",
+    );
+
+    expect(response.status).toBe(200);
+
+    const responseBody = await response.json();
+    expect(responseBody.status).toBe("IN_PROGRESS");
+  });
+
+  // Encerrar é definitivo pelas duas portas de saída.
+  test("Recusa CANCELLED -> IN_PROGRESS com 422", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "CANCELLED",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "IN_PROGRESS",
+    );
+
+    expect(response.status).toBe(422);
+
+    const responseBody = await response.json();
+    expect(responseBody.message).toBe(
+      "Uma tarefa cancelada não muda mais de status.",
+    );
+  });
+
   test("Recusa COMPLETED -> PENDING com 422", async () => {
     const { creator, sessionObject } = await authenticatedCreator();
     const createdTask = await orchestrator.createTask({
@@ -321,19 +412,22 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
     const responseBody = await response.json();
     expect(responseBody.name).toBe("UnprocessableEntityError");
     expect(responseBody.status_code).toBe(422);
+    expect(responseBody.message).toBe(
+      "Uma tarefa concluída não muda mais de status.",
+    );
   });
 
-  test("Recusa CANCELLED -> IN_PROGRESS com 422", async () => {
+  test("Recusa COMPLETED -> CANCELLED com 422", async () => {
     const { creator, sessionObject } = await authenticatedCreator();
     const createdTask = await orchestrator.createTask({
       created_by: creator.id,
-      status: "CANCELLED",
+      status: "COMPLETED",
     });
 
     const response = await patchStatus(
       createdTask.id,
       sessionObject,
-      "IN_PROGRESS",
+      "CANCELLED",
     );
 
     expect(response.status).toBe(422);
@@ -373,7 +467,7 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
   });
 
   // Reenviar o mesmo PATCH não pode virar erro.
-  test("Aceita reenviar o mesmo status, mesmo em estado terminal", async () => {
+  test("Aceita reenviar o mesmo status, mesmo em concluída", async () => {
     const { creator, sessionObject } = await authenticatedCreator();
     const createdTask = await orchestrator.createTask({
       created_by: creator.id,
@@ -389,9 +483,9 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
     expect(response.status).toBe(200);
   });
 
-  // Editar outros campos de uma tarefa encerrada continua permitido: a
+  // Editar outros campos de uma tarefa concluída continua permitido: a
   // regra trava o status, não a tarefa.
-  test("Permite corrigir o título de uma tarefa encerrada", async () => {
+  test("Permite corrigir o título de uma tarefa concluída", async () => {
     const { creator, sessionObject } = await authenticatedCreator();
     const createdTask = await orchestrator.createTask({
       created_by: creator.id,
