@@ -3,6 +3,7 @@ import Head from "next/head";
 import useSWR from "swr";
 import { useRouter } from "next/router";
 import Shell, { fmtDue, STATUS_META, PRIORITY_META } from "@/components/Shell";
+import { CLOSED_TASK_STATUSES } from "@/models/task-status.js";
 
 // const AGENDA = [
 //   {
@@ -218,27 +219,22 @@ export default function Home() {
 
   const isAssignee = (t) => t.assignees?.some((a) => a.id === userId);
 
+  // "Aberta" é tudo que não encerrou, definido pela lista compartilhada —
+  // enumerar os status abertos aqui faria a home esquecer o próximo que
+  // for criado, como quase aconteceu com "Em finalização".
+  const isOpen = (t) => !CLOSED_TASK_STATUSES.includes(t.status);
+
   const kpiPendentes = tasks?.filter(
     (t) => isAssignee(t) && t.status === "PENDING",
   ).length;
-  const kpiRecebidas = tasks?.filter(
-    (t) =>
-      isAssignee(t) && (t.status === "PENDING" || t.status === "IN_PROGRESS"),
-  ).length;
+  const kpiRecebidas = tasks?.filter((t) => isAssignee(t) && isOpen(t)).length;
   const kpiCriadas = tasks?.filter(
-    (t) =>
-      t.created_by === userId &&
-      t.status !== "COMPLETED" &&
-      t.status !== "CANCELLED",
+    (t) => t.created_by === userId && isOpen(t),
   ).length;
 
   const homeTasks = tasks
     ? tasks
-        .filter(
-          (t) =>
-            isAssignee(t) &&
-            (t.status === "PENDING" || t.status === "IN_PROGRESS"),
-        )
+        .filter((t) => isAssignee(t) && isOpen(t))
         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
         .slice(0, 5)
     : [];

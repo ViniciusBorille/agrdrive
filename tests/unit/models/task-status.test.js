@@ -13,6 +13,19 @@ describe("models/task-status.js", () => {
       expect(canTransitionTaskStatus("PENDING", "COMPLETED")).toBe(true);
     });
 
+    test("permite passar por 'em finalização' antes de concluir", () => {
+      expect(canTransitionTaskStatus("IN_PROGRESS", "FINISHING")).toBe(true);
+      expect(canTransitionTaskStatus("PENDING", "FINISHING")).toBe(true);
+      expect(canTransitionTaskStatus("FINISHING", "COMPLETED")).toBe(true);
+      expect(canTransitionTaskStatus("FINISHING", "CANCELLED")).toBe(true);
+    });
+
+    // "Em finalização" avança como os outros status abertos: não desfaz.
+    test("não deixa uma tarefa em finalização voltar atrás", () => {
+      expect(canTransitionTaskStatus("FINISHING", "IN_PROGRESS")).toBe(false);
+      expect(canTransitionTaskStatus("FINISHING", "PENDING")).toBe(false);
+    });
+
     test("permite cancelar o que ainda está aberto", () => {
       expect(canTransitionTaskStatus("PENDING", "CANCELLED")).toBe(true);
       expect(canTransitionTaskStatus("IN_PROGRESS", "CANCELLED")).toBe(true);
@@ -23,12 +36,14 @@ describe("models/task-status.js", () => {
     test("não deixa uma tarefa concluída voltar para nenhum outro status", () => {
       expect(canTransitionTaskStatus("COMPLETED", "PENDING")).toBe(false);
       expect(canTransitionTaskStatus("COMPLETED", "IN_PROGRESS")).toBe(false);
+      expect(canTransitionTaskStatus("COMPLETED", "FINISHING")).toBe(false);
       expect(canTransitionTaskStatus("COMPLETED", "CANCELLED")).toBe(false);
     });
 
     test("trata cancelada como terminal, do mesmo jeito que concluída", () => {
       expect(canTransitionTaskStatus("CANCELLED", "PENDING")).toBe(false);
       expect(canTransitionTaskStatus("CANCELLED", "IN_PROGRESS")).toBe(false);
+      expect(canTransitionTaskStatus("CANCELLED", "FINISHING")).toBe(false);
       expect(canTransitionTaskStatus("CANCELLED", "COMPLETED")).toBe(false);
     });
 
@@ -62,6 +77,23 @@ describe("models/task-status.js", () => {
       expect(allowedTaskStatusTransitions("PENDING")).toEqual([
         "PENDING",
         "IN_PROGRESS",
+        "FINISHING",
+        "COMPLETED",
+        "CANCELLED",
+      ]);
+    });
+
+    // A ordem importa para o menu da tela: "Em finalização" precisa
+    // aparecer entre "Em andamento" e "Concluída", não no fim da lista.
+    test("oferece 'em finalização' na posição certa do fluxo", () => {
+      expect(allowedTaskStatusTransitions("IN_PROGRESS")).toEqual([
+        "IN_PROGRESS",
+        "FINISHING",
+        "COMPLETED",
+        "CANCELLED",
+      ]);
+      expect(allowedTaskStatusTransitions("FINISHING")).toEqual([
+        "FINISHING",
         "COMPLETED",
         "CANCELLED",
       ]);

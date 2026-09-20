@@ -6,10 +6,15 @@
 // `COMPLETED` e `CANCELLED` são terminais. Uma tarefa encerrada não volta
 // atrás: o registro do que aconteceu vale mais do que desfazer um clique
 // errado, e criar uma tarefa nova é barato.
+//
+// `FINISHING` fica entre "Em andamento" e "Concluída": o serviço acabou,
+// falta conferir. Não é terminal — a tarefa ainda tem prazo a cumprir,
+// ainda pode atrasar e ainda recebe lembrete de vencimento.
 
 export const TASK_STATUSES = [
   "PENDING",
   "IN_PROGRESS",
+  "FINISHING",
   "COMPLETED",
   "CANCELLED",
 ];
@@ -17,13 +22,19 @@ export const TASK_STATUSES = [
 export const TASK_STATUS_LABELS = {
   PENDING: "Pendente",
   IN_PROGRESS: "Em andamento",
+  FINISHING: "Em finalização",
   COMPLETED: "Concluída",
   CANCELLED: "Cancelada",
 };
 
+// Só para frente, como já era de PENDING para IN_PROGRESS: uma tarefa em
+// finalização não volta para "Em andamento". Voltar apagaria o registro
+// de que o serviço chegou a ser dado por encerrado, e o caso real —
+// apareceu trabalho novo — se resolve concluindo e abrindo outra tarefa.
 export const TASK_STATUS_TRANSITIONS = {
-  PENDING: ["IN_PROGRESS", "COMPLETED", "CANCELLED"],
-  IN_PROGRESS: ["COMPLETED", "CANCELLED"],
+  PENDING: ["IN_PROGRESS", "FINISHING", "COMPLETED", "CANCELLED"],
+  IN_PROGRESS: ["FINISHING", "COMPLETED", "CANCELLED"],
+  FINISHING: ["COMPLETED", "CANCELLED"],
   COMPLETED: [],
   CANCELLED: [],
 };

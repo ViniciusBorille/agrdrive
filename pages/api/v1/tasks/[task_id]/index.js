@@ -17,7 +17,13 @@ const updateTaskSchema = z
       .trim()
       .max(2000, "A descrição deve ter no máximo 2000 caracteres.")
       .nullable(),
-    status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]),
+    status: z.enum([
+      "PENDING",
+      "IN_PROGRESS",
+      "FINISHING",
+      "COMPLETED",
+      "CANCELLED",
+    ]),
     priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
     assigned_to: validator.uuidSchema
       .or(

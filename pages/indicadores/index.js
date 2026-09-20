@@ -194,7 +194,14 @@ function DeadlineChip({ label, count, color, bg }) {
   );
 }
 
-function AssigneeRow({ username, pending, inProgress, completed, total }) {
+function AssigneeRow({
+  username,
+  pending,
+  inProgress,
+  finishing,
+  completed,
+  total,
+}) {
   const maxVal = Math.max(total, 1);
   return (
     <div
@@ -274,6 +281,15 @@ function AssigneeRow({ username, pending, inProgress, completed, total }) {
                 width: `${(completed / maxVal) * 100}%`,
                 background: STATUS_META.COMPLETED.color,
                 borderRadius: "3px 0 0 3px",
+              }}
+            />
+          )}
+          {finishing > 0 && (
+            <div
+              title={`Em finalização: ${finishing}`}
+              style={{
+                width: `${(finishing / maxVal) * 100}%`,
+                background: STATUS_META.FINISHING.color,
               }}
             />
           )}
@@ -358,6 +374,7 @@ export default function Indicadores() {
   const byStatus = {
     PENDING: all.filter((t) => t.status === "PENDING").length,
     IN_PROGRESS: all.filter((t) => t.status === "IN_PROGRESS").length,
+    FINISHING: all.filter((t) => t.status === "FINISHING").length,
     COMPLETED: all.filter((t) => t.status === "COMPLETED").length,
     CANCELLED: all.filter((t) => t.status === "CANCELLED").length,
   };
@@ -421,6 +438,7 @@ export default function Indicadores() {
           total: 0,
           pending: 0,
           inProgress: 0,
+          finishing: 0,
           completed: 0,
           cancelled: 0,
         };
@@ -429,6 +447,7 @@ export default function Indicadores() {
       entry.total++;
       if (task.status === "PENDING") entry.pending++;
       else if (task.status === "IN_PROGRESS") entry.inProgress++;
+      else if (task.status === "FINISHING") entry.finishing++;
       else if (task.status === "COMPLETED") entry.completed++;
       else if (task.status === "CANCELLED") entry.cancelled++;
     });
@@ -727,6 +746,10 @@ export default function Indicadores() {
                           label: "Concluídas",
                         },
                         {
+                          color: STATUS_META.FINISHING.color,
+                          label: "Em finalização",
+                        },
+                        {
                           color: STATUS_META.IN_PROGRESS.color,
                           label: "Em andamento",
                         },
@@ -765,6 +788,7 @@ export default function Indicadores() {
                         username={a.username}
                         pending={a.pending}
                         inProgress={a.inProgress}
+                        finishing={a.finishing}
                         completed={a.completed}
                         total={a.total}
                       />

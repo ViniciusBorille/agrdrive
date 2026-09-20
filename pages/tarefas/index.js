@@ -460,6 +460,7 @@ function EditTaskModal({ task, isCreator, onClose }) {
                 >
                   <option value="PENDING">Pendente</option>
                   <option value="IN_PROGRESS">Em andamento</option>
+                  <option value="FINISHING">Em finalização</option>
                   <option value="COMPLETED">Concluída</option>
                   <option value="CANCELLED">Cancelada</option>
                 </select>
@@ -730,6 +731,7 @@ function TaskRow({ t, userId }) {
   const STATUS_OPTIONS = [
     { value: "PENDING", label: "Pendente", color: "#8a6d0e" },
     { value: "IN_PROGRESS", label: "Em andamento", color: "#2b5f93" },
+    { value: "FINISHING", label: "Em finalização", color: "#1b6f7a" },
     { value: "COMPLETED", label: "Concluída", color: "#2c6e49" },
     { value: "CANCELLED", label: "Cancelada", color: "#8a8f8c" },
   ];
@@ -1149,6 +1151,8 @@ export default function Tarefas() {
             PENDING: tasks?.filter((t) => t.status === "PENDING").length ?? 0,
             IN_PROGRESS:
               tasks?.filter((t) => t.status === "IN_PROGRESS").length ?? 0,
+            FINISHING:
+              tasks?.filter((t) => t.status === "FINISHING").length ?? 0,
             COMPLETED:
               tasks?.filter((t) => t.status === "COMPLETED").length ?? 0,
             CANCELLED:
@@ -1296,6 +1300,15 @@ export default function Tarefas() {
                   count={counts.IN_PROGRESS}
                   activeBg="#e6eef6"
                   activeBorder="#3a7ca5"
+                />
+                <StatusChipFixed
+                  active={fStatus === "FINISHING"}
+                  onClick={() => setFStatus("FINISHING")}
+                  dot="#2f97a6"
+                  label="Em finalização"
+                  count={counts.FINISHING}
+                  activeBg="#e0eff1"
+                  activeBorder="#2f97a6"
                 />
                 <StatusChipFixed
                   active={fStatus === "COMPLETED"}

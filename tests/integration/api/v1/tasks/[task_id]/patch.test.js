@@ -302,6 +302,71 @@ describe("PATCH /api/v1/tasks/:task_id (transições de status)", () => {
     expect(response.status).toBe(200);
   });
 
+  test("Aceita IN_PROGRESS -> FINISHING -> COMPLETED", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "IN_PROGRESS",
+    });
+
+    const toFinishing = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "FINISHING",
+    );
+
+    expect(toFinishing.status).toBe(200);
+
+    const finishingBody = await toFinishing.json();
+    expect(finishingBody.status).toBe("FINISHING");
+
+    const toCompleted = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "COMPLETED",
+    );
+
+    expect(toCompleted.status).toBe(200);
+  });
+
+  // Em finalização a tarefa ainda tem prazo a cumprir — encerrada é só
+  // concluída ou cancelada.
+  test("Marca como atrasada a tarefa FINISHING com prazo vencido", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "IN_PROGRESS",
+      due_date: new Date(Date.now() - 86400000).toISOString(),
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "FINISHING",
+    );
+
+    expect(response.status).toBe(200);
+
+    const responseBody = await response.json();
+    expect(responseBody.is_overdue).toBe(true);
+  });
+
+  test("Recusa FINISHING -> IN_PROGRESS com 422", async () => {
+    const { creator, sessionObject } = await authenticatedCreator();
+    const createdTask = await orchestrator.createTask({
+      created_by: creator.id,
+      status: "FINISHING",
+    });
+
+    const response = await patchStatus(
+      createdTask.id,
+      sessionObject,
+      "IN_PROGRESS",
+    );
+
+    expect(response.status).toBe(422);
+  });
+
   // O histórico do que aconteceu vale mais que desfazer um clique errado.
   test("Recusa COMPLETED -> PENDING com 422", async () => {
     const { creator, sessionObject } = await authenticatedCreator();
